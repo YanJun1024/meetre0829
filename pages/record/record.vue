@@ -131,6 +131,7 @@ import { computed, reactive, ref } from "vue";
 import type { Familiarity } from "@/types";
 import { parseTags, useNotesStore } from "@/store/notes";
 import { useUserStore } from "@/store/user";
+import { compressImage } from "@/utils/media";
 import AttachmentList from "@/components/AttachmentList.vue";
 
 const store = useNotesStore();
@@ -348,7 +349,8 @@ function chooseImages() {
       uni.showLoading({ title: "上传中…" });
       for (const p of tempFilePaths) {
         try {
-          const fileID = await uploadFile(p, "jpg");
+          const compressed = await compressImage(p); // 长边1280px/60%质量
+          const fileID = await uploadFile(compressed, "jpg");
           images.value.push(fileID);
         } catch (e) {
           console.warn("[attach] 图片上传失败", e);

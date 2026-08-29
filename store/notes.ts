@@ -3,6 +3,15 @@ import { computed, ref, watch } from "vue";
 import type { Familiarity, Note, Tag, TagStatus } from "@/types";
 import { computeRankedTags } from "@/utils/rank";
 import { extractDefinition } from "@/utils/definition";
+import {
+  compressImage,
+  downloadFile,
+  extOf,
+  isLegacyFileID,
+  migratePath,
+  uploadCloudFile,
+} from "@/utils/media";
+import { logReview } from "@/utils/review-log";
 
 /** 从笔记内容中解析 #标签 */
 export function parseTags(content: string): string[] {
@@ -259,6 +268,7 @@ export const useNotesStore = defineStore("notes", () => {
   /** 查词典行为（打开词典视图触发） */
   function recordLookup(name: string) {
     bumpLatestNote(name, "dictLookups");
+    logReview("dict"); // 按天聚合，供「我的」页近7天趋势图
     const tag = tags.value.find((t) => t.name === name);
     if (tag) {
       tag.lastReviewed = Date.now();
@@ -284,6 +294,7 @@ export const useNotesStore = defineStore("notes", () => {
   /** 回看笔记行为（打开笔记视图触发） */
   function recordNoteReview(name: string) {
     bumpLatestNote(name, "noteReviews");
+    logReview("review"); // 按天聚合，供「我的」页近7天趋势图
     const tag = tags.value.find((t) => t.name === name);
     if (tag) tag.lastReviewed = Date.now();
 
@@ -354,6 +365,119 @@ export const useNotesStore = defineStore("notes", () => {
     }
   }
 
+  /**
+   * 附件迁移（换服务空间用）：旧空间图片/录音下载后转存当前云端
+   * - 图片统一压缩（长边1280px/60%），录音保持 mp3 原样
+   * - 幂等：旧 fileID 就地替换为新的，重复执行自动跳过
+   * - local_ 开头的未写穿笔记跳过云端写回（补传时自然带上新附件）
+   */
+  async function migrateOldAttachments() {
+    let migrated = 0;
+    let failed = 0;
+    const changedNotes: Note[] = [];
+
+    for (const note of notes.value) {
+      let changed = false;
+      const images: string[] = [];
+      for (const img of note.images || []) {
+        if (isLegacyFileID(img)) {
+          try {
+            const tmp = await downloadFile(img);
+            const compressed = await compressImage(tmp);
+            const fileID = await uploadCloudFile(
+              compressed,
+              migratePath(extOf(img, "jpg"))
+            );
+            images.push(fileID);
+            changed = true;
+            migrated++;
+          } catch (e) {
+            failed++;
+            images.push(img); // 保留旧引用，下次可重试
+            console.warn("[notes] 图片迁移失败", img, e);
+          }
+        } else {
+          images.push(img);
+        }
+      }
+
+      const audios: { cloudPath: string; duration: number }[] = [];
+      for (const a of note.audios || []) {
+        if (a && isLegacyFileID(a.cloudPath)) {
+          try {
+            const tmp = await downloadFile(a.cloudPath);
+            const fileID = await uploadCloudFile(
+              tmp,
+              migratePath(extOf(a.cloudPath, "mp3"))
+            );
+            audios.push({ ...a, cloudPath: fileID });
+            changed = true;
+            migrated++;
+          } catch (e) {
+            failed++;
+            audios.push(a);
+            console.warn("[notes] 录音迁移失败", a.cloudPath, e);
+          }
+        } else if (a) {
+          audios.push(a);
+        }
+      }
+
+      if (changed) {
+        note.images = images;
+        note.audios = audios;
+        changedNotes.push(note);
+      }
+    }
+
+    for (const n of changedNotes) {
+      if (n.id.startsWith("local_")) continue;
+      try {
+        await notesApi().updateNoteAttachments({
+          noteId: n.id,
+          images: n.images,
+          audios: n.audios,
+        });
+      } catch (e) {
+        warnOffline(e);
+      }
+    }
+
+    console.info(
+      `[notes] 附件迁移完成：成功 ${migrated} 个，失败 ${failed} 个，涉及笔记 ${changedNotes.length} 条`
+    );
+    return { migrated, failed, notes: changedNotes.length };
+  }
+
+  /** 一次性补传：把本地笔记/标签推送到云端（幂等，重复触发自动去重），成功后重映射 id */
+  async function pushLocalToCloud() {
+    try {
+      const res = await notesApi().pushLocalData({
+        notes: notes.value,
+        tags: tags.value,
+      });
+      cloudReady.value = true;
+      // 旧本地id → 新云端_id：保证后续行为上报/写穿的 id 与云端一致
+      const idMap: Record<string, string> = res.idMap || {};
+      for (const [oldId, newId] of Object.entries(idMap)) {
+        const note = notes.value.find((n) => n.id === oldId);
+        if (note) note.id = newId;
+      }
+      if (Object.keys(idMap).length) {
+        for (const tag of tags.value) {
+          tag.notes = tag.notes.map((id) => idMap[id] || id);
+        }
+      }
+      console.info(
+        `[notes] 补传完成：新增笔记 ${res.notesPushed} 条，标签 ${res.tagsPushed} 个`
+      );
+      return { notesPushed: res.notesPushed, tagsPushed: res.tagsPushed };
+    } catch (e) {
+      warnOffline(e);
+      return null;
+    }
+  }
+
   return {
     notes,
     tags,
@@ -372,5 +496,7 @@ export const useNotesStore = defineStore("notes", () => {
     setUserDefinition,
     setFamiliarity,
     fetchSysDefinition,
+    pushLocalToCloud,
+    migrateOldAttachments,
   };
 });

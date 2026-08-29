@@ -189,9 +189,23 @@ import AttachmentList from "@/components/AttachmentList.vue";
 import { useNotesStore } from "@/store/notes";
 import { resolveDefinition } from "@/utils/definition";
 import type { Note, RankedTag } from "@/types";
+import { onShow } from "@dcloudio/uni-app";
 
 const store = useNotesStore();
 const keyword = ref("");
+
+// 「我的」页 TOP3 去复习：跨 tab 交接标签名，填入搜索框定位
+onShow(() => {
+  try {
+    const goTag = uni.getStorageSync("meetre_go_review_tag");
+    if (goTag) {
+      uni.removeStorageSync("meetre_go_review_tag");
+      keyword.value = String(goTag);
+    }
+  } catch (e) {
+    /* 忽略 */
+  }
+});
 
 const filteredTags = computed(() =>
   keyword.value

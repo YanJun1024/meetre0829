@@ -239,6 +239,114 @@ module.exports = {
     return { errCode: 0 };
   },
 
+  /** 迁移附件工具：整体替换笔记的 images/audios（白名单清洗，校验归属） */
+  async updateNoteAttachments({ noteId, images, audios }) {
+    const userId = this.userId;
+    if (!noteId) return { errCode: 1, errMsg: "参数错误" };
+    const imgList = Array.isArray(images)
+      ? images.filter((u) => typeof u === "string" && u).slice(0, 9)
+      : [];
+    const audList = Array.isArray(audios)
+      ? audios
+          .filter((a) => a && typeof a.cloudPath === "string" && a.cloudPath)
+          .slice(0, 9)
+          .map((a) => ({
+            cloudPath: String(a.cloudPath).slice(0, 500),
+            duration: Number(a.duration) || 0,
+          }))
+      : [];
+    const res = await notesCol
+      .where({ _id: noteId, userId })
+      .update({ images: imgList, audios: audList });
+    return { errCode: 0, updated: res.updated || 0 };
+  },
+
+  /**
+   * 一次性本地数据补传（换服务空间迁移用）：
+   * - 笔记按 userId+createTime+content 指纹去重，幂等可重复触发
+   * - 保留原始 createTime / 行为计数 / 附件引用
+   * - 标签按 userId+name upsert，携带熟悉度/释义/状态等完整元数据
+   * - 返回 idMap（旧本地id → 新云端_id），客户端据此重映射
+   */
+  async pushLocalData({ notes, tags }) {
+    const userId = this.userId;
+    const inputNotes = Array.isArray(notes) ? notes.slice(0, 1000) : [];
+    const inputTags = Array.isArray(tags) ? tags.slice(0, 500) : [];
+
+    const existRes = await notesCol.where({ userId }).limit(1000).get();
+    const fingerprint = new Set(
+      existRes.data.map((d) => `${d.createTime}|${d.content}`)
+    );
+    const idMap = {};
+    let notesPushed = 0;
+
+    for (const n of inputNotes) {
+      if (!n || typeof n.content !== "string") continue;
+      const fp = `${n.createTime}|${n.content}`;
+      if (fingerprint.has(fp)) continue;
+      const res = await notesCol.add({
+        userId,
+        content: n.content,
+        tags: Array.isArray(n.tags) ? n.tags : [],
+        scene: n.scene || "",
+        sceneType: n.sceneType || "other",
+        images: Array.isArray(n.images) ? n.images.slice(0, 9) : [],
+        audios: Array.isArray(n.audios)
+          ? n.audios
+              .filter((a) => a && typeof a.cloudPath === "string")
+              .slice(0, 9)
+              .map((a) => ({
+                cloudPath: String(a.cloudPath).slice(0, 500),
+                duration: Number(a.duration) || 0,
+              }))
+          : [],
+        dictLookups: Number(n.dictLookups) || 0,
+        noteReviews: Number(n.noteReviews) || 0,
+        createTime: Number(n.createTime) || Date.now(),
+        isDeleted: !!n.isDeleted,
+      });
+      fingerprint.add(fp);
+      if (n.id) idMap[n.id] = res.id;
+      notesPushed++;
+    }
+
+    let tagsPushed = 0;
+    for (const t of inputTags) {
+      if (!t || !t.name) continue;
+      const noteIds = (Array.isArray(t.notes) ? t.notes : [])
+        .map((id) => idMap[id] || id)
+        .filter((id) => typeof id === "string");
+      const doc = {
+        name: t.name,
+        status: ["learning", "mastered", "snoozed"].includes(t.status)
+          ? t.status
+          : "learning",
+        notes: noteIds,
+        noteCount: noteIds.length,
+        rankScore: Number(t.rankScore) || 0,
+        familiarity: t.familiarity || null,
+        userDefinition: t.userDefinition || null,
+        sysDefinition: t.sysDefinition || null,
+      };
+      if (t.masteredAt) doc.masteredAt = Number(t.masteredAt);
+      if (t.snoozeExpireAt) doc.snoozeExpireAt = Number(t.snoozeExpireAt);
+      if (t.lastReviewed) doc.lastReviewed = Number(t.lastReviewed);
+      if (t.familiaritySource) doc.familiaritySource = t.familiaritySource;
+      if (t.familiarityUpdatedAt)
+        doc.familiarityUpdatedAt = Number(t.familiarityUpdatedAt);
+
+      const exist = await tagsCol.where({ userId, name: t.name }).get();
+      if (exist.data.length) {
+        await tagsCol.doc(exist.data[0]._id).update(doc);
+      } else {
+        await tagsCol.add({ userId, ...doc });
+      }
+      tagsPushed++;
+    }
+
+    return { errCode: 0, notesPushed, tagsPushed, idMap };
+  },
+
   /**
    * 系统释义兜底（开发文档 3.6.2 第二层，v1.5）
    * 英文词走 dictionaryapi.dev 免费词典 API，取回后缓存到标签；失败/中文返回 null 退回空状态
