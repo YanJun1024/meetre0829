@@ -1,11 +1,12 @@
 <template>
   <view v-if="images.length || audios.length" class="att-list">
-    <!-- 图片：宫格缩略图，点击全屏预览（image 组件直接支持云文件ID） -->
+    <!-- 图片：宫格缩略图，点击全屏预览 -->
+    <!-- 真机上 image 组件不能直接解析 cloud:// 文件ID，必须先换 getTempFileURL 临时链接 -->
     <view v-if="images.length" class="att-imgs">
       <view v-for="(img, i) in images" :key="img" class="att-img-wrap">
         <image
           class="att-img"
-          :src="img"
+          :src="displayImages[i] || img"
           mode="aspectFill"
           @click="preview(i)"
         />
@@ -36,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, ref } from "vue";
+import { onUnmounted, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -52,8 +53,57 @@ defineEmits<{
   (e: "remove-audio", index: number): void;
 }>();
 
+// =============================================================
+// 云文件ID → 临时链接（全局缓存，图片与录音共用）
+// mp-weixin 真机上 image/previewImage 无法直接解析 cloud:// fileID
+// =============================================================
+
+const urlCache = new Map<string, Promise<string>>();
+
+function resolveUrl(url: string): Promise<string> {
+  if (!url.startsWith("cloud://")) return Promise.resolve(url);
+  if (!urlCache.has(url)) {
+    urlCache.set(
+      url,
+      new Promise<string>((resolve, reject) => {
+        // eslint-disable-next-line
+        uniCloud.getTempFileURL({
+          fileList: [url],
+          success: (res: any) => {
+            const f = res.fileList && res.fileList[0];
+            if (f && f.tempFileURL) resolve(f.tempFileURL);
+            else reject(new Error("无临时链接"));
+          },
+          fail: (err: any) => reject(err),
+        } as any);
+      })
+    );
+  }
+  return urlCache.get(url)!;
+}
+
+/** 图片显示链接列表：按 props.images 逐个换临时链接，失败保留原值 */
+const displayImages = ref<string[]>([]);
+watch(
+  () => [...props.images],
+  async (imgs) => {
+    displayImages.value = await Promise.all(
+      imgs.map((u) =>
+        resolveUrl(u).catch((e) => {
+          console.warn("[attach] 图片临时链接解析失败", u, e);
+          return u;
+        })
+      )
+    );
+  },
+  { immediate: true }
+);
+
 function preview(index: number) {
-  uni.previewImage({ urls: props.images, current: props.images[index] });
+  uni.previewImage({
+    urls: displayImages.value,
+    current: displayImages.value[index],
+  });
 }
 
 function fmt(seconds: number): string {
@@ -66,30 +116,7 @@ function fmt(seconds: number): string {
 // =============================================================
 
 const playingPath = ref("");
-const tempUrlCache = new Map<string, Promise<string>>();
 let audioCtx: UniApp.InnerAudioContext | null = null;
-
-function resolveAudio(cloudPath: string): Promise<string> {
-  if (!cloudPath.startsWith("cloud://")) return Promise.resolve(cloudPath);
-  if (!tempUrlCache.has(cloudPath)) {
-    tempUrlCache.set(
-      cloudPath,
-      new Promise<string>((resolve, reject) => {
-        // eslint-disable-next-line
-        uniCloud.getTempFileURL({
-          fileList: [cloudPath],
-          success: (res: any) => {
-            const f = res.fileList && res.fileList[0];
-            if (f && f.tempFileURL) resolve(f.tempFileURL);
-            else reject(new Error("无临时链接"));
-          },
-          fail: (err: any) => reject(err),
-        } as any);
-      })
-    );
-  }
-  return tempUrlCache.get(cloudPath)!;
-}
 
 function togglePlay(cloudPath: string) {
   if (playingPath.value === cloudPath) {
@@ -98,7 +125,7 @@ function togglePlay(cloudPath: string) {
     return;
   }
   audioCtx?.stop();
-  resolveAudio(cloudPath)
+  resolveUrl(cloudPath)
     .then((src) => {
       if (!audioCtx) {
         audioCtx = uni.createInnerAudioContext();

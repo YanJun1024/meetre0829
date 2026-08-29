@@ -324,7 +324,7 @@ function pushToCloud() {
       pushing.value = true;
       uni.showLoading({ title: "补传中…", mask: true });
       const res = await store.pushLocalToCloud();
-      uni.hideLoading();
+      uni.hideLoading({ fail: () => {} } as any);
       pushing.value = false;
       if (res) {
         uni.setStorageSync(PUSH_DAY_KEY, Date.now());
@@ -366,7 +366,7 @@ function migrateAttachments() {
       migrating.value = true;
       uni.showLoading({ title: "迁移中…", mask: true });
       const res = await store.migrateOldAttachments();
-      uni.hideLoading();
+      uni.hideLoading({ fail: () => {} } as any);
       migrating.value = false;
       if (res) {
         uni.showToast({

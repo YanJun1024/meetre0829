@@ -123,6 +123,9 @@
         </scroll-view>
       </view>
     </view>
+
+    <!-- 全局隐私授权弹窗（含官方 agreePrivacyAuthorization 按钮） -->
+    <PrivacyPopup />
   </view>
 </template>
 
@@ -133,6 +136,7 @@ import { parseTags, useNotesStore } from "@/store/notes";
 import { useUserStore } from "@/store/user";
 import { compressImage } from "@/utils/media";
 import AttachmentList from "@/components/AttachmentList.vue";
+import PrivacyPopup from "@/components/PrivacyPopup.vue";
 
 const store = useNotesStore();
 const userStore = useUserStore();
@@ -357,18 +361,46 @@ function chooseImages() {
           uni.showToast({ title: "图片上传失败", icon: "none" });
         }
       }
-      uni.hideLoading();
+      uni.hideLoading({ fail: () => {} } as any);
     },
     fail: (err: any) => {
       const msg = (err && err.errMsg) || "";
+      console.warn("[attach] chooseImage 失败", msg);
       if (msg.indexOf("privacy") >= 0) {
         // 隐私协议未同意：拉起官方授权弹窗，同意后自动重试选图
         handlePrivacyError(chooseImages);
-      } else if (msg.indexOf("cancel") < 0) {
+      } else if (msg.indexOf("cancel") >= 0) {
         // 用户主动取消不提示
+      } else if (msg.indexOf("auth") >= 0 || msg.indexOf("deny") >= 0) {
+        // 系统权限（相册/相机）被拒过：微信不再弹系统框，引导去设置开启
+        guideAlbumPermission();
+      } else {
         uni.showToast({ title: "选择图片失败", icon: "none" });
       }
     },
+  });
+}
+
+/** 相册/相机系统权限被拒后的引导（与录音链路对齐） */
+function guideAlbumPermission() {
+  uni.getSetting({
+    success: ({ authSetting }: any) => {
+      const denied =
+        authSetting["scope.album"] === false || authSetting["scope.camera"] === false;
+      if (!denied) {
+        uni.showToast({ title: "选择图片失败", icon: "none" });
+        return;
+      }
+      uni.showModal({
+        title: "需要相册权限",
+        content: "请在设置中允许使用相册/相机，用于添加图片笔记",
+        confirmText: "去设置",
+        success: ({ confirm }) => {
+          if (confirm) uni.openSetting({});
+        },
+      });
+    },
+    fail: () => uni.showToast({ title: "选择图片失败", icon: "none" }),
   });
 }
 
@@ -410,7 +442,7 @@ recorder.onStop((res: any) => {
       console.warn("[attach] 录音上传失败", e);
       uni.showToast({ title: "录音上传失败", icon: "none" });
     })
-    .finally(() => uni.hideLoading());
+    .finally(() => uni.hideLoading({ fail: () => {} } as any));
 });
 
 recorder.onError((err: any) => {
@@ -489,7 +521,13 @@ function save() {
     return;
   }
   if (uploading.value > 0) {
-    uni.showToast({ title: "附件上传中，稍等一下", icon: "none" });
+    // 用 modal 而非 toast：loading 显示中弹 toast 会触发 uni-app 框架内部
+    // 的 hideLoading（promise 模式），产生 UnhandledPromiseRejection
+    uni.showModal({
+      title: "请稍等",
+      content: "附件还在上传中，完成后再保存",
+      showCancel: false,
+    });
     return;
   }
   const tags = parseTags(text);
@@ -527,7 +565,7 @@ function save() {
   if (tag?.status === "mastered") {
     uni.showModal({
       title: "重新加入复习吗？",
-      content: `笔记已保存。# ${tags[0]} 已在已掌握词库，重新加入后将继续参与排名复习`,
+      content: `笔记已保存。#${tags[0]} 已在已掌握词库，重新加入后将继续参与排名复习`,
       confirmText: "加入",
       cancelText: "暂不",
       success: ({ confirm }) => {
