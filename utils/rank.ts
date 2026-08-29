@@ -69,8 +69,12 @@ export function computeRankedTags(
   notes: Note[],
   now: number = Date.now()
 ): RankedTag[] {
+  // 「暂时不想看」7 天到期后自动恢复参与排名（开发文档 3.4）：
+  // 即使存储层 status 尚未写回 learning，显示层也按已恢复处理
   const activeTags = tags.filter(
-    (t) => t.status !== "mastered" && t.status !== "snoozed"
+    (t) =>
+      t.status !== "mastered" &&
+      !(t.status === "snoozed" && (t.snoozeExpireAt || 0) > now)
   );
 
   const scored = activeTags.map((tag) => {

@@ -15,6 +15,7 @@ const notesCol = db.collection("notes");
 const tagsCol = db.collection("tags");
 
 const SNOOZE_DURATION = 7 * 24 * 60 * 60 * 1000; // 暂时不想看：7 天
+const REMASTER_INIT_SCORE = 1; // 退出已掌握后的初始排名分（开发文档 3.1.5）
 
 module.exports = {
   /** 校验 token 并挂到 this.userId，供各方法直接读取 */
@@ -119,8 +120,8 @@ module.exports = {
     return { errCode: 0, id: res.id };
   },
 
-  /** 更新标签状态：learning / mastered / snoozed */
-  async setTagStatus({ name, status }) {
+  /** 更新标签状态：learning / mastered / snoozed；reset=退出已掌握，从 0 开始 */
+  async setTagStatus({ name, status, reset }) {
     const userId = this.userId;
     const now = Date.now();
 
@@ -134,6 +135,14 @@ module.exports = {
     } else {
       update.masteredAt = null;
       update.snoozeExpireAt = null;
+    }
+
+    // 开发文档 3.3.2：退出「已掌握」→ 从 0 开始（清空熟悉度，排名分回初始值）
+    if (reset && status === "learning") {
+      update.familiarity = null;
+      update.familiarityUpdatedAt = now;
+      update.rankScore = REMASTER_INIT_SCORE;
+      update.familiaritySource = null;
     }
 
     await tagsCol.where({ userId, name }).update(update);

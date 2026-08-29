@@ -15,11 +15,16 @@
       </view>
 
       <!-- 已掌握列表（按掌握时间降序） -->
+      <view v-if="filteredTags.length" class="quote-tip">
+        💡 研究表明，一个词需要在不同场景遇到 5-7 次才能真正记住
+      </view>
+
       <view class="mastered-list">
         <view
           v-for="tag in filteredTags"
           :key="tag.name"
           class="mastered-card"
+          @click="viewDict(tag.name)"
           @longpress="confirmRestore(tag.name)"
         >
           <view class="card-info">
@@ -27,7 +32,7 @@
             <text class="card-meta">
               {{ noteCount(tag.name) }} 条笔记 · 掌握于 {{ formatTime(tag.masteredAt) }}
             </text>
-            <text class="card-tip">长按恢复学习</text>
+            <text class="card-tip">点击查看词典 · 长按恢复学习</text>
           </view>
           <view class="check-badge">✓</view>
         </view>
@@ -71,6 +76,27 @@ function confirmRestore(name: string) {
       if (confirm) {
         store.setTagStatus(name, "learning");
         uni.showToast({ title: "已恢复学习" });
+      }
+    },
+  });
+}
+
+/**
+ * 查看词典 → 自动取消掌握（开发文档 3.2.1 / 3.3.2）：
+ * 已掌握后查词典 = 其实忘了，从 0 开始重新学习
+ */
+function viewDict(name: string) {
+  uni.showModal({
+    title: "查看词典",
+    content: `查看 #${name} 的词典会自动取消掌握状态，从 0 开始重新学习，继续吗？`,
+    confirmText: "查看",
+    cancelText: "再想想",
+    success: ({ confirm }) => {
+      if (confirm) {
+        store.setTagStatus(name, "learning");
+        uni.navigateTo({
+          url: `/pages/tag-detail/tag-detail?name=${encodeURIComponent(name)}`,
+        });
       }
     },
   });
@@ -133,6 +159,14 @@ function formatTime(ts?: number): string {
 
 .mastered-list {
   margin-top: var(--space-sm);
+}
+
+/* 文档 3.3.3 提示语 */
+.quote-tip {
+  margin-top: var(--space-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-align: center;
 }
 
 .mastered-card {

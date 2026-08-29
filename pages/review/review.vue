@@ -196,6 +196,8 @@ const keyword = ref("");
 
 // 「我的」页 TOP3 去复习：跨 tab 交接标签名，填入搜索框定位
 onShow(() => {
+  // 「暂时不想看」到期的标签写回 learning（开发文档 3.4）
+  store.restoreExpiredSnoozes();
   try {
     const goTag = uni.getStorageSync("meetre_go_review_tag");
     if (goTag) {

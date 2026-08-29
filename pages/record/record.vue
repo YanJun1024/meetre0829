@@ -92,6 +92,14 @@
 
       <!-- 保存 -->
       <button class="save-btn" @click="save">保存</button>
+
+      <!-- 自动识别释义提示（开发文档 3.6.5 入口二）：2.5s 自动消失，点击去详情 -->
+      <view v-if="autoDefHint" class="autodef-bar" @click="goAutoDef">
+        <text class="ad-text"
+          >📖 已记下你对 #{{ autoDefHint.name }} 的理解：{{ autoDefHint.text }}</text
+        >
+        <text class="ad-link">✏️ 看看</text>
+      </view>
     </view>
 
     <!-- 保存后轻反馈条（开发文档 3.2.2 v1.5）：非弹窗，2.5s 自动消失 -->
@@ -195,6 +203,19 @@ const FEEDBACK_DURATION = 2500; // 2.5s 自动消失
 
 const feedback = reactive({ visible: false, tagName: "" });
 let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 自动识别释义提示（3.6.5 入口二）：保存时命中释义句式才出现
+const autoDefHint = ref<{ name: string; text: string } | null>(null);
+let autoDefTimer: ReturnType<typeof setTimeout> | null = null;
+
+function goAutoDef() {
+  const name = autoDefHint.value?.name;
+  if (!name) return;
+  autoDefHint.value = null;
+  uni.navigateTo({
+    url: `/pages/tag-detail/tag-detail?name=${encodeURIComponent(name)}`,
+  });
+}
 
 const scenes = [
   { label: "上班时", type: "work" },
@@ -533,7 +554,7 @@ function save() {
   const tags = parseTags(text);
   const matched = scenes.find((s) => s.label === scene.value);
 
-  store.addNote(
+  const saved = store.addNote(
     text,
     tags[0] || "",
     scene.value === "其他" ? customScene.value.trim() : scene.value,
@@ -541,6 +562,16 @@ function save() {
     [...images.value],
     [...audios.value]
   );
+
+  // 命中释义句式 → 显示「已记下你的理解」提示（2.5s 自动消失）
+  if (saved) {
+    autoDefHint.value = saved;
+    if (autoDefTimer) clearTimeout(autoDefTimer);
+    autoDefTimer = setTimeout(() => {
+      autoDefHint.value = null;
+      autoDefTimer = null;
+    }, 2500);
+  }
 
   content.value = "";
   scene.value = "";
@@ -908,5 +939,33 @@ function save() {
 
 .fb-chip:active {
   background-color: var(--color-bg-input);
+}
+
+/* 自动识别释义提示条（3.6.5 入口二）：文档流内轻条，不遮挡底部反馈条 */
+.autodef-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  background-color: var(--color-primary-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.ad-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-primary-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-link {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-dark);
 }
 </style>

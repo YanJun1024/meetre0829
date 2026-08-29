@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import type { Familiarity, Note, Tag, TagStatus } from "@/types";
-import { computeRankedTags } from "@/utils/rank";
+import { computeRankedTags, RANK_CONFIG } from "@/utils/rank";
 import { extractDefinition } from "@/utils/definition";
 import {
   compressImage,
@@ -58,10 +58,20 @@ export const useNotesStore = defineStore("notes", () => {
   /** 参与排名的标签列表（按排名分降序） */
   const rankedTags = computed(() => computeRankedTags(tags.value, notes.value));
 
-  /** 最近标签快捷入口（3-5 个） */
-  const recentTags = computed(() =>
-    rankedTags.value.slice(0, 5).map((t) => t.name)
-  );
+  /** 最近标签快捷入口（3-5 个）：按最近活跃（复习/记录）时间降序，而非排名分（开发文档 2.1） */
+  const recentTags = computed(() => {
+    const lastActive = (name: string): number => {
+      const tag = tags.value.find((t) => t.name === name);
+      const latestNote = notes.value
+        .filter((n) => n.tags.includes(name) && !n.isDeleted)
+        .sort((a, b) => b.createTime - a.createTime)[0];
+      return Math.max(tag?.lastReviewed || 0, latestNote?.createTime || 0);
+    };
+    return rankedTags.value
+      .map((t) => t.name)
+      .sort((a, b) => lastActive(b) - lastActive(a))
+      .slice(0, 5);
+  });
 
   const masteredTags = computed(() =>
     tags.value.filter((t) => t.status === "mastered")
@@ -197,6 +207,18 @@ export const useNotesStore = defineStore("notes", () => {
       tag.notes.push(tempId);
     }
 
+    // 自动提取释义落库（开发文档 3.6.5 入口二的数据来源）：
+    // 仅规则 1/2（明确释义句式）才写入 userDefinition；rule 3 兜底整句
+    // 只在阅读时实时展示，不作为「你的理解」保存
+    let autoDef: { name: string; text: string } | null = null;
+    if (tag && !tag.userDefinition?.text) {
+      const extracted = extractDefinition(tagName, notes.value);
+      if (extracted && extracted.rule !== 3 && extracted.text) {
+        setUserDefinition(tagName, extracted.text, "auto");
+        autoDef = { name: tagName, text: extracted.text };
+      }
+    }
+
     // 云端写穿：成功后用云端 _id 替换临时 id
     notesApi()
       .addNote({ content, tag: tagName, scene, sceneType, images, audios })
@@ -209,12 +231,24 @@ export const useNotesStore = defineStore("notes", () => {
         }
       })
       .catch(warnOffline);
+
+    return autoDef;
   }
 
   function setTagStatus(name: string, status: TagStatus) {
     const tag = tags.value.find((t) => t.name === name);
     if (!tag) return;
+    const prevStatus = tag.status;
     tag.status = status;
+    // 退出「已掌握」= 从 0 开始（开发文档 3.3.2）：清空熟悉度，
+    // 排名分以 REMASTER_INIT_SCORE 为基础重新累计
+    let reset = false;
+    if (prevStatus === "mastered" && status === "learning") {
+      reset = true;
+      tag.familiarity = null;
+      tag.familiarityUpdatedAt = Date.now();
+      tag.rankScore = RANK_CONFIG.REMASTER_INIT_SCORE;
+    }
     if (status === "mastered") {
       tag.masteredAt = Date.now();
       delete tag.snoozeExpireAt;
@@ -228,11 +262,36 @@ export const useNotesStore = defineStore("notes", () => {
     }
 
     notesApi()
-      .setTagStatus({ name, status })
+      .setTagStatus({ name, status, reset })
       .then(() => {
         cloudReady.value = true;
       })
       .catch(warnOffline);
+  }
+
+  /**
+   * 「暂时不想看」到期持久恢复（开发文档 3.4）：
+   * rank.ts 已做显示层惰性放行，这里负责把存储层 status 写回 learning
+   * （排名分不变、熟悉度保留，与退出掌握的「从 0 开始」区分）
+   */
+  function restoreExpiredSnoozes() {
+    const now = Date.now();
+    for (const tag of tags.value) {
+      if (
+        tag.status === "snoozed" &&
+        tag.snoozeExpireAt &&
+        tag.snoozeExpireAt <= now
+      ) {
+        tag.status = "learning";
+        delete tag.snoozeExpireAt;
+        notesApi()
+          .setTagStatus({ name: tag.name, status: "learning" })
+          .then(() => {
+            cloudReady.value = true;
+          })
+          .catch(warnOffline);
+      }
+    }
   }
 
   function removeTag(name: string) {
@@ -488,6 +547,7 @@ export const useNotesStore = defineStore("notes", () => {
     recentTags,
     masteredTags,
     loadAll,
+    restoreExpiredSnoozes,
     addNote,
     setTagStatus,
     removeTag,
