@@ -1,0 +1,68 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "content", "tags", "createTime"],
+  "permission": {
+    "read": "doc.userId == auth.uid",
+    "create": "auth.uid != null",
+    "update": "doc.userId == auth.uid",
+    "delete": "doc.userId == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "存储文档 ID（笔记 ID）"
+    },
+    "userId": {
+      "bsonType": "string",
+      "description": "用户 ID，对应 uni-id-users._id"
+    },
+    "content": {
+      "bsonType": "string",
+      "description": "笔记内容，含 #标签"
+    },
+    "tags": {
+      "bsonType": "array",
+      "items": {
+        "bsonType": "string"
+      },
+      "description": "标签名数组"
+    },
+    "scene": {
+      "bsonType": "string",
+      "description": "场景描述"
+    },
+    "sceneType": {
+      "bsonType": "string",
+      "description": "场景类型：work/show/reading/chat/other"
+    },
+    "images": {
+      "bsonType": "array",
+      "items": {
+        "bsonType": "string"
+      },
+      "description": "图片云存储路径数组"
+    },
+    "audios": {
+      "bsonType": "array",
+      "description": "录音数组 [{cloudPath, duration}]"
+    },
+    "dictLookups": {
+      "bsonType": "int",
+      "defaultValue": 0,
+      "description": "查词典次数（左滑）"
+    },
+    "noteReviews": {
+      "bsonType": "int",
+      "defaultValue": 0,
+      "description": "回看笔记次数（右滑）"
+    },
+    "createTime": {
+      "bsonType": "long",
+      "description": "创建时间戳（毫秒）"
+    },
+    "isDeleted": {
+      "bsonType": "bool",
+      "defaultValue": false,
+      "description": "软删除标记"
+    }
+  }
+}

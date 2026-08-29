@@ -1,0 +1,71 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "name"],
+  "permission": {
+    "read": "doc.userId == auth.uid",
+    "create": "auth.uid != null",
+    "update": "doc.userId == auth.uid",
+    "delete": "doc.userId == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "存储文档 ID"
+    },
+    "userId": {
+      "bsonType": "string",
+      "description": "用户 ID，对应 uni-id-users._id"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "标签名（不含 #）"
+    },
+    "noteCount": {
+      "bsonType": "int",
+      "defaultValue": 0,
+      "description": "笔记数"
+    },
+    "status": {
+      "bsonType": "string",
+      "enumeration": ["learning", "mastered", "snoozed"],
+      "defaultValue": "learning",
+      "description": "标签状态：学习中/已掌握/暂时不想看"
+    },
+    "masteredAt": {
+      "bsonType": "long",
+      "description": "进入已掌握的时间戳"
+    },
+    "snoozeExpireAt": {
+      "bsonType": "long",
+      "description": "暂时不想看的恢复时间戳（7天）"
+    },
+    "lastReviewed": {
+      "bsonType": "long",
+      "description": "最近复习时间戳"
+    },
+    "rankScore": {
+      "bsonType": "double",
+      "defaultValue": 0,
+      "description": "排名分（冻结于退出排名时）"
+    },
+    "familiarity": {
+      "bsonType": "string",
+      "enumeration": ["unfamiliar", "fuzzy", "familiar"],
+      "description": "熟悉度：不熟/有点印象/熟"
+    },
+    "familiarityUpdatedAt": {
+      "bsonType": "long",
+      "description": "熟悉度更新时间戳"
+    },
+    "userDefinition": {
+      "bsonType": "object",
+      "description": "用户释义 {text, source, weak, updatedAt}"
+    },
+    "notes": {
+      "bsonType": "array",
+      "items": {
+        "bsonType": "string"
+      },
+      "description": "关联笔记 ID 数组"
+    }
+  }
+}

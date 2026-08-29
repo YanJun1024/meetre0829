@@ -1,0 +1,80 @@
+/* ============================================================
+   MeetRe 设计令牌（Design Tokens）
+   最终定版 · 基于分层染色架构
+   说明：小程序不支持 :root，统一挂载在 page 选择器上
+   ============================================================ */
+
+page {
+  /* ========== 品牌色 ========== */
+  --color-primary: #C4744A;        /* 赭石 - 主品牌色 */
+  --color-primary-dark: #A85F3A;   /* 按压/深色状态 */
+  --color-primary-light: #D49A7A;  /* 浅色/辅助 */
+  --color-primary-bg: #F5EDE4;     /* 品牌色背景 */
+
+  /* ========== 状态色 ========== */
+  --color-red: #D9605A;      /* 需复习 - 柔和红 */
+  --color-red-bg: #F8ECEA;
+  --color-yellow: #D4A44A;   /* 复习中 - 暖金 */
+  --color-yellow-bg: #F8F0E0;
+  --color-green: #5A8A6A;    /* 已掌握 - 柔和绿 */
+  --color-green-bg: #E8F0EA;
+
+  /* ========== 滑动动作色 ========== */
+  --color-swipe-left: #3D5A78;   /* 左滑-词典（深灰蓝） */
+  --color-swipe-right: #E07528;  /* 右滑-笔记（亮橙） */
+
+  /* ========== 背景色（分层染色） ========== */
+  --color-bg-system: #FFFFFF;    /* 系统框架层 */
+  --color-bg-page: #F7F4EB;      /* 内容层 - 暖米色 */
+  --color-bg-card: #FFFFFF;      /* 操作交互层 */
+  --color-bg-secondary: #F0EBE2; /* 分割/次要区域 */
+  --color-bg-input: #F5F2EB;     /* 输入框内部 */
+
+  /* ========== 边框 ========== */
+  --color-border: #E4DDD4;
+  --color-border-light: #EDE8E0;
+
+  /* ========== 文字色 ========== */
+  --color-text-primary: #1A2332;     /* 主标题 */
+  --color-text-body: #3D4A5C;        /* 正文 */
+  --color-text-secondary: #6B655E;   /* 辅助文字 */
+  --color-text-placeholder: #B5AFA8; /* 占位符 */
+  --color-text-inverse: #FFFFFF;     /* 反色文字 */
+
+  /* ========== 阴影 ========== */
+  --shadow-card: 0 2px 12px rgba(43, 45, 66, 0.07);
+  --shadow-card-hover: 0 4px 20px rgba(43, 45, 66, 0.12);
+  --shadow-float: 0 4px 16px rgba(196, 116, 74, 0.30);
+  --shadow-tab: 0 -2px 10px rgba(43, 45, 66, 0.06);
+
+  /* ========== 圆角 ========== */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* ========== 间距 ========== */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  /* ========== 字体 ========== */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 15px;
+  --font-size-md: 17px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 32px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
