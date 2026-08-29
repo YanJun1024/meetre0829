@@ -5,8 +5,10 @@
       <view class="user-card">
         <view class="avatar">{{ avatarText }}</view>
         <view class="user-info">
-          <text class="nickname">微信用户</text>
-          <text class="login-hint" @click="login">点击登录</text>
+          <text class="nickname">{{ nickname }}</text>
+          <text class="login-hint" @click="login">
+            {{ userStore.loggedIn ? "已登录" : "点击登录" }}
+          </text>
         </view>
       </view>
 
@@ -36,29 +38,88 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useNotesStore } from "@/store/notes";
+import { useUserStore } from "@/store/user";
 
 const store = useNotesStore();
+const userStore = useUserStore();
+
+/** 昵称取首字符作头像 */
+const avatarText = computed(() => userStore.nickname.charAt(0) || "M");
+const nickname = computed(() => userStore.nickname || "微信用户");
+
+/** 静默登录失败时可手动重试 */
+function login() {
+  if (userStore.loggedIn) {
+    uni.showToast({ title: "已登录", icon: "none" });
+    return;
+  }
+  userStore.ensureLogin().then((ok) => {
+    uni.showToast({ title: ok ? "登录成功" : "登录失败", icon: "none" });
+  });
+}
 
 const masteredCount = computed(() => store.masteredTags.length);
 
-const stats = computed(() => [
-  { label: "学习天数", value: 0 },
-  { label: "掌握词数", value: masteredCount.value },
-  { label: "累计记录", value: store.notes.length },
-  { label: "连续天数", value: 0 },
-  { label: "本周复习", value: 0 },
-]);
+// =============================================================
+// 统计数据（基于笔记 createTime + 标签 lastReviewed 真实计算）
+// =============================================================
 
-const avatarText = computed(() => "M");
-
-function login() {
-  // TODO: 接入 uni-id-pages（微信登录 + 手机号登录）
-  uni.showToast({ title: "待接入 uni-id-pages", icon: "none" });
+/** 本地日期键：YYYY-MM-DD */
+function dayKey(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** 活跃天集合：记录笔记的天 + 复习过的天 */
+const activeDays = computed(() => {
+  const days = new Set<string>();
+  store.notes.forEach((n) => {
+    if (!n.isDeleted) days.add(dayKey(n.createTime));
+  });
+  store.tags.forEach((t) => {
+    if (t.lastReviewed) days.add(dayKey(t.lastReviewed));
+  });
+  return days;
+});
+
+/** 连续天数：今天没记则从昨天起算 */
+const streakDays = computed(() => {
+  const days = activeDays.value;
+  if (!days.size) return 0;
+  const d = new Date();
+  if (!days.has(dayKey(d.getTime()))) d.setDate(d.getDate() - 1);
+  let streak = 0;
+  while (days.has(dayKey(d.getTime()))) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+});
+
+/** 本周复习：本周（周一起算）复习过的标签数 */
+const weekReviews = computed(() => {
+  const now = new Date();
+  const weekStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - ((now.getDay() + 6) % 7)
+  ).getTime();
+  return store.tags.filter(
+    (t) => t.lastReviewed && t.lastReviewed >= weekStart
+  ).length;
+});
+
+const stats = computed(() => [
+  { label: "学习天数", value: activeDays.value.size },
+  { label: "掌握词数", value: masteredCount.value },
+  { label: "累计记录", value: store.notes.length },
+  { label: "连续天数", value: streakDays.value },
+  { label: "本周复习", value: weekReviews.value },
+]);
+
 function showMastered() {
-  // TODO: 已掌握词库页面
-  uni.showToast({ title: "已掌握词库（待实现）", icon: "none" });
+  uni.navigateTo({ url: "/pages/mastered/mastered" });
 }
 </script>
 

@@ -18,6 +18,9 @@ unpackage
 # HBuilderX 本地配置
 .hbuilderx/launch.json
 
+# 云端密钥（小程序 AppSecret）
+uniCloud-ali*/cloudfunctions/user/config.json
+
 # Editor directories and files
 .idea
 *.suo

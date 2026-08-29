@@ -3,9 +3,11 @@
 // MeetRe 笔记/标签 云对象
 // 说明：
 // 1. 云函数拥有数据库管理员权限，不受 schema permission 限制
-// 2. uni-id 未接入前使用临时用户标识，接入后在此校验 token 换取真实 uid
+// 2. _before 校验客户端 token（uni-id-lite），未登录/失效回退 local_user
 // 3. 排名分由前端按开发文档 3.1.5 公式实时计算，云端只存原始数据
 // =============================================================
+
+const uniIdLite = require("uni-id-lite");
 
 const db = uniCloud.database();
 const dbCmd = db.command;
@@ -14,17 +16,22 @@ const tagsCol = db.collection("tags");
 
 const SNOOZE_DURATION = 7 * 24 * 60 * 60 * 1000; // 暂时不想看：7 天
 
-/** 获取当前用户标识（TODO: uni-id 接入后校验 token，返回 auth.uid） */
-function getUserId() {
-  return "local_user";
-}
-
 module.exports = {
-  _before() {},
+  /** 校验 token 并挂到 this.userId，供各方法直接读取 */
+  _before() {
+    let token = "";
+    try {
+      token = this.getUniIdToken() || "";
+    } catch (e) {
+      token = "";
+    }
+    const res = token ? uniIdLite.checkToken(token) : null;
+    this.userId = res && res.errCode === 0 ? res.uid : "local_user";
+  },
 
   /** 启动时拉取全部数据（笔记 + 标签），并处理暂不看到期恢复 */
   async loadAll() {
-    const userId = getUserId();
+    const userId = this.userId;
 
     const tagsRes = await tagsCol.where({ userId }).limit(1000).get();
 
@@ -54,11 +61,25 @@ module.exports = {
     return { errCode: 0, notes: notesRes.data, tags: tagsRes.data };
   },
 
-  /** 新增笔记（自动创建/关联标签） */
-  async addNote({ content, tag, scene, sceneType }) {
-    const userId = getUserId();
+  /** 新增笔记（自动创建/关联标签），支持附件：images 字符串数组 / audios 对象数组 */
+  async addNote({ content, tag, scene, sceneType, images, audios }) {
+    const userId = this.userId;
     const now = Date.now();
     const tags = tag ? [tag] : [];
+
+    // 附件白名单清洗（最多各 9 个，字段只保留必要项）
+    const imgList = Array.isArray(images)
+      ? images.filter((u) => typeof u === "string" && u).slice(0, 9)
+      : [];
+    const audList = Array.isArray(audios)
+      ? audios
+          .filter((a) => a && typeof a.cloudPath === "string" && a.cloudPath)
+          .slice(0, 9)
+          .map((a) => ({
+            cloudPath: String(a.cloudPath).slice(0, 500),
+            duration: Number(a.duration) || 0,
+          }))
+      : [];
 
     const res = await notesCol.add({
       userId,
@@ -66,8 +87,8 @@ module.exports = {
       tags,
       scene: scene || "",
       sceneType: sceneType || "other",
-      images: [],
-      audios: [],
+      images: imgList,
+      audios: audList,
       dictLookups: 0,
       noteReviews: 0,
       createTime: now,
@@ -100,7 +121,7 @@ module.exports = {
 
   /** 更新标签状态：learning / mastered / snoozed */
   async setTagStatus({ name, status }) {
-    const userId = getUserId();
+    const userId = this.userId;
     const now = Date.now();
 
     const update = { status };
@@ -121,7 +142,7 @@ module.exports = {
 
   /** 删除标签（笔记保留，仅解除聚合） */
   async removeTag({ name }) {
-    const userId = getUserId();
+    const userId = this.userId;
     await tagsCol.where({ userId, name }).remove();
     return { errCode: 0 };
   },
@@ -134,7 +155,7 @@ module.exports = {
    * - 已掌握后查词典 → 自动取消掌握，排名分清零（重新掌握从 0 开始）
    */
   async recordAction({ name, action }) {
-    const userId = getUserId();
+    const userId = this.userId;
     const now = Date.now();
     const RECENT_ADD_WINDOW = 5 * 60 * 1000;
 
@@ -164,8 +185,19 @@ module.exports = {
         patch.masteredAt = null;
         patch.rankScore = 0;
       }
-      if (recentAdd) {
+      // 用户手动标记 > 行为推断（开发文档 3.2），手动标记后不再覆盖
+      if (recentAdd && tag.familiaritySource !== "user") {
         patch.familiarity = action === "dict" ? "unfamiliar" : "fuzzy";
+        patch.familiaritySource = "behavior";
+        patch.familiarityUpdatedAt = now;
+      } else if (
+        action === "dict" &&
+        tag.familiarity === "familiar" &&
+        tag.familiaritySource !== "user"
+      ) {
+        // v2.0 熟悉度自动降级：标了「熟」却还要查词典 → 降为有点印象
+        patch.familiarity = "fuzzy";
+        patch.familiaritySource = "behavior";
         patch.familiarityUpdatedAt = now;
       }
       await tagsCol.doc(tag._id).update(patch);
@@ -176,7 +208,7 @@ module.exports = {
 
   /** 保存用户释义（source: auto=采用自动提取 / manual=手动编辑） */
   async setUserDefinition({ name, text, source }) {
-    const userId = getUserId();
+    const userId = this.userId;
     const userDefinition = {
       text,
       source: source === "auto" ? "auto" : "manual",
@@ -187,5 +219,65 @@ module.exports = {
       .where({ userId, name })
       .update({ userDefinition });
     return { errCode: 0, userDefinition };
+  },
+
+  /**
+   * 保存后反馈：用户手动标记熟悉度（开发文档 3.2.2 v1.5）
+   * familiarity: familiar=能 / fuzzy=有点悬 / unfamiliar=不能
+   * 手动标记优先级高于行为推断，不会被覆盖
+   */
+  async setFamiliarity({ name, familiarity }) {
+    const userId = this.userId;
+    if (!["unfamiliar", "fuzzy", "familiar"].includes(familiarity)) {
+      return { errCode: 1, errMsg: "参数错误" };
+    }
+    await tagsCol.where({ userId, name }).update({
+      familiarity,
+      familiaritySource: "user",
+      familiarityUpdatedAt: Date.now(),
+    });
+    return { errCode: 0 };
+  },
+
+  /**
+   * 系统释义兜底（开发文档 3.6.2 第二层，v1.5）
+   * 英文词走 dictionaryapi.dev 免费词典 API，取回后缓存到标签；失败/中文返回 null 退回空状态
+   */
+  async getSysDefinition({ name }) {
+    const userId = this.userId;
+    const tagRes = await tagsCol.where({ userId, name }).get();
+    const tag = tagRes.data[0];
+    if (tag && tag.sysDefinition) {
+      return { errCode: 0, sysDefinition: tag.sysDefinition };
+    }
+    // 仅支持纯英文词
+    if (!/^[a-zA-Z][a-zA-Z'-]*$/.test(name || "")) {
+      return { errCode: 0, sysDefinition: null };
+    }
+    try {
+      const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(name.toLowerCase())}`;
+      const res = await uniCloud.httpclient.request(url, {
+        method: "GET",
+        dataType: "json",
+        timeout: 5000,
+      });
+      const entry = Array.isArray(res.data) ? res.data[0] : null;
+      const meaning = entry && entry.meanings && entry.meanings[0];
+      const def = meaning && meaning.definitions && meaning.definitions[0];
+      if (!def || !def.definition) {
+        return { errCode: 0, sysDefinition: null };
+      }
+      const sysDefinition = {
+        text: def.definition,
+        pos: meaning.partOfSpeech || "",
+        source: "dictionaryapi.dev",
+        updatedAt: Date.now(),
+      };
+      if (tag) await tagsCol.doc(tag._id).update({ sysDefinition });
+      return { errCode: 0, sysDefinition };
+    } catch (e) {
+      // 兜底失败退回空状态，不报错
+      return { errCode: 0, sysDefinition: null };
+    }
   },
 };

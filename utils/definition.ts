@@ -1,4 +1,4 @@
-import type { Note } from "@/types";
+import type { Note, Tag } from "@/types";
 
 // =============================================================
 // 释义自动提取（对应开发文档 3.6.2 三条规则）
@@ -73,4 +73,28 @@ export function extractDefinition(
     noteId: tagNotes[0].id,
     rule: 3,
   };
+}
+
+/**
+ * 三层释义解析（开发文档 3.6.2 / 3.6.6）
+ * 第一层：用户释义（手动编辑 + 笔记自动提取）
+ * 第二层：系统释义（云端词典，缓存于标签）
+ * 第三层：无 → 空状态引导
+ */
+export function resolveDefinition(
+  tag: Pick<Tag, "name" | "userDefinition" | "sysDefinition"> | undefined,
+  notes: Note[]
+): { text: string; source: "user" | "auto" | "sys" } | null {
+  if (!tag) return null;
+  if (tag.userDefinition?.text) {
+    return { text: tag.userDefinition.text, source: "user" };
+  }
+  const extracted = extractDefinition(tag.name, notes);
+  if (extracted?.text) {
+    return { text: extracted.text, source: "auto" };
+  }
+  if (tag.sysDefinition?.text) {
+    return { text: tag.sysDefinition.text, source: "sys" };
+  }
+  return null;
 }

@@ -34,6 +34,14 @@
         </scroll-view>
       </view>
 
+      <!-- 个性化回访提示（v2.0 智能维护）：红档中最久未复习的标签，当日可关闭 -->
+      <view v-if="revisitName && !keyword" class="revisit-banner">
+        <text class="revisit-text" @click="goRevisit">
+          💡 好久不见 #{{ revisitName }}，来复习一下？
+        </text>
+        <text class="revisit-close" @click="dismissRevisit">✕</text>
+      </view>
+
       <!-- 排名列表（按排名分降序）：左滑词典 / 右滑笔记 -->
       <view class="rank-list">
         <view v-for="tag in filteredTags" :key="tag.name" class="card-wrap">
@@ -69,7 +77,7 @@
               <view class="status-dot" :class="`dot-${tag.statusLevel}`" />
             </template>
 
-            <!-- 词典视图：我的理解（用户释义 > 系统释义 > 空状态） -->
+            <!-- 词典视图：三层释义（用户释义 > 系统释义 > 空状态，开发文档 3.6.6） -->
             <template v-else-if="expandedView === 'dict'">
               <view class="expand-view">
                 <view class="expand-header">
@@ -77,27 +85,40 @@
                   <text class="expand-title">#{{ tag.name }} · 我的理解</text>
                 </view>
 
-                <template v-if="getTagNotes(tag.name).length || tag.userDefinition">
-                  <view class="def-section">
-                    <view class="def-label-row">
-                      <text class="def-label">我的释义</text>
-                      <text class="def-source">
-                        {{ tag.userDefinition ? "手动编辑" : "自动提取" }}
-                      </text>
-                    </view>
-                    <text class="def-text">{{ currentDefinition(tag) || "还没有释义" }}</text>
-                    <text class="def-edit" @click.stop="openEditor(tag)">改一下释义</text>
+                <!-- 第一/二层：有效释义 -->
+                <view v-if="defView(tag).text" class="def-section">
+                  <view class="def-label-row">
+                    <text class="def-label">
+                      {{ defView(tag).source === "sys" ? "系统释义" : "我的释义" }}
+                    </text>
+                    <text class="def-source">{{ defSourceLabel(tag) }}</text>
                   </view>
+                  <text class="def-text" :class="{ muted: defView(tag).source === 'sys' }">
+                    {{ defView(tag).text }}
+                  </text>
+                  <text v-if="defView(tag).source === 'sys'" class="def-tip">
+                    💡 这是系统释义，换成你自己的话会更记得住
+                  </text>
+                  <text class="def-edit" @click.stop="openEditor(tag)">✏️ 改一下</text>
+                </view>
 
-                  <view class="def-section sys">
-                    <text class="def-label">系统释义</text>
-                    <text class="def-text muted">v1.5 版本提供，敬请期待</text>
-                  </view>
-                </template>
-
+                <!-- 第三层：空状态引导 -->
                 <view v-else class="def-empty">
-                  <text class="def-empty-title">还没有关于 #{{ tag.name }} 的理解记录</text>
-                  <text class="def-empty-tip">点右下角 + 记一条你自己的理解吧</text>
+                  <text class="def-empty-title">
+                    {{ store.sysDefLoading === tag.name ? "正在查询系统释义…" : "还没写下它的意思呢" }}
+                  </text>
+                  <text class="def-empty-tip">下次遇到的时候，顺手记一下就好</text>
+                  <text class="def-edit" @click.stop="openEditor(tag)">✏️ 写一句</text>
+                </view>
+
+                <!-- 遇到场景（开发文档 3.6.4） -->
+                <view v-if="tagScenes(tag.name).length" class="scene-section">
+                  <text class="def-label">📍 遇到场景</text>
+                  <text
+                    v-for="s in tagScenes(tag.name)"
+                    :key="s"
+                    class="scene-item"
+                  >· {{ s }}</text>
                 </view>
               </view>
             </template>
@@ -117,6 +138,10 @@
                     class="note-item"
                   >
                     <text class="note-content">{{ note.content }}</text>
+                    <AttachmentList
+                      :images="note.images || []"
+                      :audios="note.audios || []"
+                    />
                     <text class="note-time">{{ formatTime(note.createTime) }}</text>
                   </view>
                 </view>
@@ -160,8 +185,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import FloatAddButton from "@/components/FloatAddButton.vue";
+import AttachmentList from "@/components/AttachmentList.vue";
 import { useNotesStore } from "@/store/notes";
-import { extractDefinition } from "@/utils/definition";
+import { resolveDefinition } from "@/utils/definition";
 import type { Note, RankedTag } from "@/types";
 
 const store = useNotesStore();
@@ -177,6 +203,40 @@ const recentTags = computed(() => store.recentTags);
 
 /** 内嵌在搜索框里的快捷标签（排名第一/最新标签），开始输入时隐藏 */
 const quickTag = computed(() => store.recentTags[0] || "");
+
+// =============================================================
+// 个性化回访（v2.0 智能维护）：红档中最久未复习的标签
+// 点按定位到该标签；关闭后当日不再出现
+// =============================================================
+
+const VISIT_MUTE_KEY = "meetre_visit_muted";
+
+function dayKeyOf(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+const revisitMuted = ref(
+  uni.getStorageSync(VISIT_MUTE_KEY) === dayKeyOf(Date.now())
+);
+
+const revisitName = computed(() => {
+  if (revisitMuted.value) return "";
+  const reds = [...store.rankedTags]
+    .filter((t) => t.statusLevel === "red")
+    .sort((a, b) => (a.lastReviewed || 0) - (b.lastReviewed || 0));
+  return reds[0]?.name || "";
+});
+
+function goRevisit() {
+  if (revisitName.value) keyword.value = revisitName.value;
+}
+
+function dismissRevisit() {
+  revisitMuted.value = true;
+  uni.setStorageSync(VISIT_MUTE_KEY, dayKeyOf(Date.now()));
+}
 
 // =============================================================
 // 滑动手势：左滑 → 词典，右滑 → 笔记（阈值 60px，阻尼上限 100px）
@@ -230,12 +290,16 @@ function onTouchEnd() {
   touch.name = "";
 }
 
-/** 打开词典/笔记视图，并记录行为埋点 */
+/** 打开词典/笔记视图，并记录行为埋点；词典视图按需拉取系统释义兜底 */
 function openView(name: string, view: "dict" | "notes") {
   expandedName.value = name;
   expandedView.value = view;
-  if (view === "dict") store.recordLookup(name);
-  else store.recordNoteReview(name);
+  if (view === "dict") {
+    store.recordLookup(name);
+    store.fetchSysDefinition(name);
+  } else {
+    store.recordNoteReview(name);
+  }
 }
 
 function collapse() {
@@ -251,8 +315,9 @@ function onCardClick(tag: RankedTag) {
   // 滑动结束后 500ms 内忽略 click，避免误触详情
   if (Date.now() - lastSwipeTs < 500) return;
   if (expandedName.value) return;
-  // TODO: 标签详情页
-  uni.showToast({ title: `标签详情：${tag.name}（待实现）`, icon: "none" });
+  uni.navigateTo({
+    url: `/pages/tag-detail/tag-detail?name=${encodeURIComponent(tag.name)}`,
+  });
 }
 
 // =============================================================
@@ -265,10 +330,31 @@ function getTagNotes(name: string): Note[] {
     .sort((a, b) => b.createTime - a.createTime);
 }
 
-/** 生效释义：用户释义 > 自动提取 */
-function currentDefinition(tag: RankedTag): string {
-  if (tag.userDefinition?.text) return tag.userDefinition.text;
-  return extractDefinition(tag.name, store.notes)?.text || "";
+/** 遇到场景：该标签笔记的场景去重，最新优先，最多 3 条（开发文档 3.6.4） */
+function tagScenes(name: string): string[] {
+  const scenes: string[] = [];
+  getTagNotes(name).forEach((n) => {
+    if (n.scene && !scenes.includes(n.scene)) scenes.push(n.scene);
+  });
+  return scenes.slice(0, 3);
+}
+
+/** 三层释义视图（开发文档 3.6.6）：text 为空表示落到空状态引导 */
+interface DefView {
+  text: string;
+  source: "user" | "auto" | "sys" | "none";
+}
+
+function defView(tag: RankedTag): DefView {
+  const resolved = resolveDefinition(tag, store.notes);
+  return resolved || { text: "", source: "none" };
+}
+
+function defSourceLabel(tag: RankedTag): string {
+  const source = defView(tag).source;
+  if (source === "sys") return "内置词库";
+  if (source === "user") return "手动编辑";
+  return "自动提取";
 }
 
 function formatTime(ts: number): string {
@@ -286,7 +372,7 @@ const editText = ref("");
 
 function openEditor(tag: RankedTag) {
   editingName.value = tag.name;
-  editText.value = currentDefinition(tag);
+  editText.value = defView(tag).text;
 }
 
 function closeEditor() {
@@ -402,6 +488,30 @@ function showActions(tag: RankedTag) {
 
 .rank-list {
   margin-top: var(--space-sm);
+}
+
+/* 个性化回访提示条（v2.0）：轻量主色条，不阻断列表 */
+.revisit-banner {
+  margin-top: var(--space-md);
+  background-color: var(--color-primary-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.revisit-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-dark);
+  flex: 1;
+}
+
+.revisit-close {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-xs);
 }
 
 /* 卡片容器：底层滑动色，上层白色卡片 */
@@ -544,10 +654,6 @@ function showActions(tag: RankedTag) {
   gap: var(--space-sm);
 }
 
-.def-section.sys {
-  opacity: 0.75;
-}
-
 .def-label-row {
   display: flex;
   align-items: center;
@@ -583,6 +689,28 @@ function showActions(tag: RankedTag) {
   color: var(--color-primary-dark);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
+}
+
+.def-tip {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* 遇到场景区：米色纸面，与释义区同级 */
+.scene-section {
+  background-color: var(--color-bg-page);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.scene-item {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-body);
+  line-height: 1.6;
 }
 
 /* 空状态 */

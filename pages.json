@@ -17,6 +17,18 @@
       "style": {
         "navigationBarTitleText": "我的"
       }
+    },
+    {
+      "path": "pages/mastered/mastered",
+      "style": {
+        "navigationBarTitleText": "已掌握词库"
+      }
+    },
+    {
+      "path": "pages/tag-detail/tag-detail",
+      "style": {
+        "navigationBarTitleText": "标签详情"
+      }
     }
   ],
   "tabBar": {

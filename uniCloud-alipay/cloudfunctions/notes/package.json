@@ -1,0 +1,7 @@
+{
+  "name": "notes",
+  "version": "1.0.0",
+  "dependencies": {
+    "uni-id-lite": "file:../common/uni-id-lite"
+  }
+}

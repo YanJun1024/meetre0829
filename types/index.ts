@@ -35,8 +35,17 @@ export interface Tag {
   notes: string[];
   rankScore: number;
   familiarity: Familiarity | null;
+  /** 熟悉度来源：behavior=行为推断 / user=保存后反馈手动选择（优先级更高） */
+  familiaritySource?: "behavior" | "user";
   familiarityUpdatedAt?: number;
   userDefinition: UserDefinition | null;
+  /** 系统释义（第二层兜底，云端词典 API，取回后缓存） */
+  sysDefinition?: {
+    text: string;
+    pos?: string;
+    source: string;
+    updatedAt: number;
+  } | null;
 }
 
 export interface RankedTag extends Tag {
