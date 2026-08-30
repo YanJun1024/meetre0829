@@ -5,7 +5,7 @@
       <!-- 顶部搜索区：白色操作容器，包住浅米色输入井 -->
       <view class="search-panel">
         <view class="search-field">
-          <text class="search-icon">🔍</text>
+          <AppIcon name="search" :size="18" class="search-icon" />
           <input
             v-model="keyword"
             class="search-input"
@@ -36,22 +36,25 @@
 
       <!-- 个性化回访提示（v2.0 智能维护）：红档中最久未复习的标签，当日可关闭 -->
       <view v-if="revisitName && !keyword" class="revisit-banner">
-        <text class="revisit-text" @click="goRevisit">
-          💡 好久不见 #{{ revisitName }}，来复习一下？
-        </text>
+        <view class="revisit-text" @click="goRevisit">
+          <AppIcon name="bulb" :size="14" color="#A85F3A" />
+          <text>好久不见 #{{ revisitName }}，来复习一下？</text>
+        </view>
         <text class="revisit-close" @click="dismissRevisit">✕</text>
       </view>
 
       <!-- 排名列表（按排名分降序）：左滑词典 / 右滑笔记 -->
       <view class="rank-list">
         <view v-for="tag in filteredTags" :key="tag.name" class="card-wrap">
-          <!-- 滑动底色：右滑露出左侧「笔记」(亮橙)，左滑露出右侧「词典」(深灰蓝) -->
+          <!-- 滑动底色：右滑露出左侧「笔记」(赭石)，左滑露出右侧「词典」(柔和绿) -->
           <view class="swipe-bg">
             <view class="swipe-hint hint-notes">
-              <text>📝 笔记 →</text>
+              <AppIcon name="note" :size="16" color="#FFFFFF" />
+              <text>笔记 →</text>
             </view>
             <view class="swipe-hint hint-dict">
-              <text>← 📖 词典</text>
+              <text>← 词典</text>
+              <AppIcon name="book" :size="16" color="#FFFFFF" />
             </view>
           </view>
 
@@ -96,10 +99,14 @@
                   <text class="def-text" :class="{ muted: defView(tag).source === 'sys' }">
                     {{ defView(tag).text }}
                   </text>
-                  <text v-if="defView(tag).source === 'sys'" class="def-tip">
-                    💡 这是系统释义，换成你自己的话会更记得住
-                  </text>
-                  <text class="def-edit" @click.stop="openEditor(tag)">✏️ 改一下</text>
+                  <view v-if="defView(tag).source === 'sys'" class="def-tip">
+                    <AppIcon name="bulb" :size="13" color="#6B655E" />
+                    <text>这是系统释义，换成你自己的话会更记得住</text>
+                  </view>
+                  <view class="def-edit" @click.stop="openEditor(tag)">
+                    <AppIcon name="edit" :size="13" color="#A85F3A" />
+                    <text>改一下</text>
+                  </view>
                 </view>
 
                 <!-- 第三层：空状态引导 -->
@@ -108,12 +115,18 @@
                     {{ store.sysDefLoading === tag.name ? "正在查询系统释义…" : "还没写下它的意思呢" }}
                   </text>
                   <text class="def-empty-tip">下次遇到的时候，顺手记一下就好</text>
-                  <text class="def-edit" @click.stop="openEditor(tag)">✏️ 写一句</text>
+                  <view class="def-edit" @click.stop="openEditor(tag)">
+                    <AppIcon name="edit" :size="13" color="#A85F3A" />
+                    <text>写一句</text>
+                  </view>
                 </view>
 
                 <!-- 遇到场景（开发文档 3.6.4） -->
                 <view v-if="tagScenes(tag.name).length" class="scene-section">
-                  <text class="def-label">📍 遇到场景</text>
+                  <view class="def-label">
+                    <AppIcon name="location" :size="13" color="#6B655E" />
+                    <text>遇到场景</text>
+                  </view>
                   <text
                     v-for="s in tagScenes(tag.name)"
                     :key="s"
@@ -186,6 +199,7 @@
 import { computed, reactive, ref } from "vue";
 import FloatAddButton from "@/components/FloatAddButton.vue";
 import AttachmentList from "@/components/AttachmentList.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import { useNotesStore } from "@/store/notes";
 import { resolveDefinition } from "@/utils/definition";
 import type { Note, RankedTag } from "@/types";
@@ -519,9 +533,12 @@ function showActions(tag: RankedTag) {
 }
 
 .revisit-text {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-size-sm);
   color: var(--color-primary-dark);
-  flex: 1;
 }
 
 .revisit-close {
@@ -553,6 +570,7 @@ function showActions(tag: RankedTag) {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   color: #ffffff;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
@@ -677,6 +695,9 @@ function showActions(tag: RankedTag) {
 }
 
 .def-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
@@ -702,12 +723,18 @@ function showActions(tag: RankedTag) {
 
 .def-edit {
   align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   color: var(--color-primary-dark);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
 
 .def-tip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   line-height: 1.5;

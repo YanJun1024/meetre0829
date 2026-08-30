@@ -4,7 +4,7 @@
       <!-- 顶部搜索区：白色操作容器，包住浅米色输入井 -->
       <view class="search-panel">
         <view class="search-field">
-          <text class="search-icon">🔍</text>
+          <AppIcon name="search" :size="18" class="search-icon" />
           <input
             v-model="keyword"
             class="search-input"
@@ -16,7 +16,8 @@
 
       <!-- 已掌握列表（按掌握时间降序） -->
       <view v-if="filteredTags.length" class="quote-tip">
-        💡 研究表明，一个词需要在不同场景遇到 5-7 次才能真正记住
+        <AppIcon name="bulb" :size="13" color="#6B655E" />
+        <text>研究表明，一个词需要在不同场景遇到 5-7 次才能真正记住</text>
       </view>
 
       <view class="mastered-list">
@@ -48,6 +49,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useNotesStore } from "@/store/notes";
+import AppIcon from "@/components/AppIcon.vue";
 
 const store = useNotesStore();
 const keyword = ref("");
@@ -164,6 +166,10 @@ function formatTime(ts?: number): string {
 /* 文档 3.3.3 提示语 */
 .quote-tip {
   margin-top: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   text-align: center;

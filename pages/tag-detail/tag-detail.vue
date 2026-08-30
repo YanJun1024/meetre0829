@@ -22,10 +22,14 @@
           <text class="def-source">{{ defSourceLabel }}</text>
         </view>
         <text class="def-text" :class="{ muted: defView.source === 'sys' }">{{ defView.text || "还没有释义" }}</text>
-        <text v-if="defView.source === 'sys'" class="def-tip">
-          💡 这是系统释义，换成你自己的话会更记得住
-        </text>
-        <text class="def-edit" @click="openEditor">✏️ 改一下</text>
+        <view v-if="defView.source === 'sys'" class="def-tip">
+          <AppIcon name="bulb" :size="13" color="#6B655E" />
+          <text>这是系统释义，换成你自己的话会更记得住</text>
+        </view>
+        <view class="def-edit" @click="openEditor">
+          <AppIcon name="edit" :size="13" color="#A85F3A" />
+          <text>改一下</text>
+        </view>
       </view>
 
       <!-- 全部笔记 -->
@@ -73,6 +77,7 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import FloatAddButton from "@/components/FloatAddButton.vue";
 import AttachmentList from "@/components/AttachmentList.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import { useNotesStore } from "@/store/notes";
 import { resolveDefinition } from "@/utils/definition";
 
@@ -267,6 +272,9 @@ function formatTime(ts?: number): string {
 }
 
 .def-tip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   line-height: 1.5;
@@ -274,6 +282,9 @@ function formatTime(ts?: number): string {
 
 .def-edit {
   align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   color: var(--color-primary-dark);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);

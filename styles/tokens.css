@@ -19,9 +19,9 @@ page {
   --color-green: #5A8A6A;    /* 已掌握 - 柔和绿 */
   --color-green-bg: #E8F0EA;
 
-  /* ========== 滑动动作色 ========== */
-  --color-swipe-left: #3D5A78;   /* 左滑-词典（深灰蓝） */
-  --color-swipe-right: #E07528;  /* 右滑-笔记（亮橙） */
+  /* ========== 滑动动作色（并入品牌色系：词典-柔和绿 / 笔记-品牌赭石） ========== */
+  --color-swipe-left: #5A8A6A;   /* 左滑-词典（柔和绿，与已掌握色同族） */
+  --color-swipe-right: #C4744A;  /* 右滑-笔记（品牌赭石） */
 
   /* ========== 背景色（分层染色） ========== */
   --color-bg-system: #FFFFFF;    /* 系统框架层 */
@@ -34,18 +34,18 @@ page {
   --color-border: #E4DDD4;
   --color-border-light: #EDE8E0;
 
-  /* ========== 文字色 ========== */
-  --color-text-primary: #1A2332;     /* 主标题 */
-  --color-text-body: #3D4A5C;        /* 正文 */
+  /* ========== 文字色（暖色调，与米色背景协调） ========== */
+  --color-text-primary: #2C2823;     /* 主标题 - 暖近黑 */
+  --color-text-body: #4A4239;        /* 正文 - 暖灰褐 */
   --color-text-secondary: #6B655E;   /* 辅助文字 */
-  --color-text-placeholder: #B5AFA8; /* 占位符 */
+  --color-text-placeholder: #948C82; /* 占位符（对比度提升） */
   --color-text-inverse: #FFFFFF;     /* 反色文字 */
 
-  /* ========== 阴影 ========== */
-  --shadow-card: 0 2px 12px rgba(43, 45, 66, 0.07);
-  --shadow-card-hover: 0 4px 20px rgba(43, 45, 66, 0.12);
+  /* ========== 阴影（暖色调，米色底上可见） ========== */
+  --shadow-card: 0 4px 16px rgba(87, 62, 38, 0.10);
+  --shadow-card-hover: 0 6px 22px rgba(87, 62, 38, 0.16);
   --shadow-float: 0 4px 16px rgba(196, 116, 74, 0.30);
-  --shadow-tab: 0 -2px 10px rgba(43, 45, 66, 0.06);
+  --shadow-tab: 0 -2px 10px rgba(87, 62, 38, 0.08);
 
   /* ========== 圆角 ========== */
   --radius-sm: 6px;
@@ -54,19 +54,19 @@ page {
   --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* ========== 间距 ========== */
+  /* ========== 间距（整体放宽一档） ========== */
   --space-xs: 4px;
   --space-sm: 8px;
-  --space-md: 12px;
-  --space-lg: 16px;
+  --space-md: 14px;
+  --space-lg: 20px;
   --space-xl: 24px;
   --space-2xl: 32px;
   --space-3xl: 48px;
 
   /* ========== 字体 ========== */
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-size-xs: 11px;
-  --font-size-sm: 13px;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
   --font-size-base: 15px;
   --font-size-md: 17px;
   --font-size-lg: 20px;

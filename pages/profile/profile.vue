@@ -75,7 +75,7 @@
         </view>
         <template v-if="activities.length">
           <view v-for="(a, i) in activities" :key="i" class="act-item">
-            <text class="act-icon">{{ a.icon }}</text>
+            <AppIcon :name="a.icon" :size="16" :color="a.color" />
             <text class="act-text">{{ a.text }}</text>
             <text class="act-time">{{ a.time }}</text>
           </view>
@@ -123,6 +123,7 @@ import { useNotesStore } from "@/store/notes";
 import { useUserStore } from "@/store/user";
 import { isLegacyFileID } from "@/utils/media";
 import { getWeeklyTrend } from "@/utils/review-log";
+import AppIcon from "@/components/AppIcon.vue";
 
 const store = useNotesStore();
 const userStore = useUserStore();
@@ -254,6 +255,7 @@ function goReview(name: string) {
 
 interface Activity {
   icon: string;
+  color: string;
   text: string;
   time: string;
   ts: number;
@@ -265,7 +267,8 @@ const activities = computed<Activity[]>(() => {
     if (n.isDeleted) continue;
     const tagText = n.tags.length ? `#${n.tags[0]}` : "";
     list.push({
-      icon: "✍️",
+      icon: "write",
+      color: "#A85F3A",
       text: tagText ? `记录了 ${tagText}` : "记录了一条笔记",
       time: timeText(n.createTime),
       ts: n.createTime,
@@ -274,7 +277,8 @@ const activities = computed<Activity[]>(() => {
   for (const t of store.tags) {
     if (t.lastReviewed) {
       list.push({
-        icon: "📖",
+        icon: "book",
+        color: "#3D5A78",
         text: `复习了 #${t.name}`,
         time: timeText(t.lastReviewed),
         ts: t.lastReviewed,
@@ -454,9 +458,9 @@ function migrateAttachments() {
 }
 
 .stat-value {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
+  color: var(--color-primary-dark);
 }
 
 .stat-label {
@@ -687,11 +691,6 @@ function migrateAttachments() {
 
 .act-item:last-child {
   border-bottom: none;
-}
-
-.act-icon {
-  font-size: var(--font-size-base);
-  flex-shrink: 0;
 }
 
 .act-text {

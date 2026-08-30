@@ -20,11 +20,11 @@ $uni-color-success: #5A8A6A; // 已掌握 - 柔和绿
 $uni-color-warning: #D4A44A; // 复习中 - 暖金
 $uni-color-error: #D9605A;   // 需复习 - 柔红
 
-/* 文字基本颜色 */
-$uni-text-color: #3D4A5C; // 正文（MeetRe text-body）
+/* 文字基本颜色（与 styles/tokens.css 同步，暖色调） */
+$uni-text-color: #4A4239; // 正文（MeetRe text-body）
 $uni-text-color-inverse: #fff; // 反色
 $uni-text-color-grey: #6B655E; // 辅助文字（WCAG AA 达标）
-$uni-text-color-placeholder: #B5AFA8;
+$uni-text-color-placeholder: #948C82;
 $uni-text-color-disable: #c0c0c0;
 
 /* 背景颜色 */

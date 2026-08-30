@@ -16,7 +16,10 @@
       <!-- 已有笔记预览（开发文档 3.2.3 v2.0）：输入 #tag 且有历史时显示 -->
       <view v-if="previewTag" class="preview-panel">
         <view class="preview-head">
-          <text class="preview-title">📖 你之前记过 #{{ previewTag.name }}</text>
+          <view class="preview-title">
+            <AppIcon name="book" :size="14" color="#A85F3A" />
+            <text>你之前记过 #{{ previewTag.name }}</text>
+          </view>
           <view
             v-if="previewTag.tag.familiarity"
             class="preview-dot"
@@ -69,12 +72,17 @@
           </text>
         </view>
         <template v-if="attachExpanded">
-          <view class="attach-chip" @click="chooseImages">📷 添加图片</view>
+          <view class="attach-chip" @click="chooseImages">
+            <AppIcon name="camera" :size="16" />
+            <text>添加图片</text>
+          </view>
           <view v-if="!recording" class="attach-chip" @click="startRecord">
-            🎤 添加录音
+            <AppIcon name="mic" :size="16" />
+            <text>添加录音</text>
           </view>
           <view v-else class="attach-chip recording" @click="stopRecord">
-            ⏹ 停止录音（{{ recordSeconds }}s）
+            <AppIcon name="stop" :size="16" color="#FFFFFF" />
+            <text>停止录音（{{ recordSeconds }}s）</text>
           </view>
         </template>
       </view>
@@ -95,21 +103,37 @@
 
       <!-- 自动识别释义提示（开发文档 3.6.5 入口二）：2.5s 自动消失，点击去详情 -->
       <view v-if="autoDefHint" class="autodef-bar" @click="goAutoDef">
+        <AppIcon name="book" :size="14" color="#A85F3A" />
         <text class="ad-text"
-          >📖 已记下你对 #{{ autoDefHint.name }} 的理解：{{ autoDefHint.text }}</text
+          >已记下你对 #{{ autoDefHint.name }} 的理解：{{ autoDefHint.text }}</text
         >
-        <text class="ad-link">✏️ 看看</text>
+        <view class="ad-link">
+          <AppIcon name="edit" :size="13" color="#A85F3A" />
+          <text>看看</text>
+        </view>
       </view>
     </view>
 
     <!-- 保存后轻反馈条（开发文档 3.2.2 v1.5）：非弹窗，2.5s 自动消失 -->
     <view v-if="feedback.visible" class="feedback-bar">
-      <text class="fb-title">✅ 已保存 #{{ feedback.tagName }}</text>
+      <view class="fb-title">
+        <AppIcon name="check" :size="15" color="#5A8A6A" />
+        <text>已保存 #{{ feedback.tagName }}</text>
+      </view>
       <text class="fb-question">这个词你现在能说出来吗？</text>
       <view class="fb-options">
-        <view class="fb-chip" @click="answerFeedback('familiar')">😎 能</view>
-        <view class="fb-chip" @click="answerFeedback('fuzzy')">😅 有点悬</view>
-        <view class="fb-chip" @click="answerFeedback('unfamiliar')">🤔 不能</view>
+        <view class="fb-chip" @click="answerFeedback('familiar')">
+          <AppIcon name="faceGood" :size="16" color="#A85F3A" />
+          <text>能</text>
+        </view>
+        <view class="fb-chip" @click="answerFeedback('fuzzy')">
+          <AppIcon name="faceMeh" :size="16" color="#A85F3A" />
+          <text>有点悬</text>
+        </view>
+        <view class="fb-chip" @click="answerFeedback('unfamiliar')">
+          <AppIcon name="faceBad" :size="16" color="#A85F3A" />
+          <text>不能</text>
+        </view>
       </view>
     </view>
 
@@ -144,6 +168,7 @@ import { parseTags, useNotesStore } from "@/store/notes";
 import { useUserStore } from "@/store/user";
 import { compressImage } from "@/utils/media";
 import AttachmentList from "@/components/AttachmentList.vue";
+import AppIcon from "@/components/AppIcon.vue";
 import PrivacyPopup from "@/components/PrivacyPopup.vue";
 
 const store = useNotesStore();
@@ -182,7 +207,7 @@ const drawerNotes = computed(() =>
 /** 点击圆点手动调整熟悉度（用户手动 > 行为推断，开发文档 3.2） */
 function adjustFamiliarity(name: string) {
   uni.showActionSheet({
-    itemList: ["😎 熟", "😅 有点印象", "🤔 不熟"],
+    itemList: ["熟", "有点印象", "不熟"],
     success: ({ tapIndex }) => {
       const levels: Familiarity[] = ["familiar", "fuzzy", "unfamiliar"];
       store.setFamiliarity(name, levels[tapIndex]);
@@ -710,6 +735,9 @@ function save() {
 }
 
 .preview-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-primary-dark);
@@ -868,6 +896,9 @@ function save() {
 }
 
 .attach-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-full);
@@ -911,6 +942,9 @@ function save() {
 }
 
 .fb-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-primary-dark);
@@ -928,7 +962,10 @@ function save() {
 
 .fb-chip {
   flex: 1;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   background-color: var(--color-primary-bg);
   border-radius: var(--radius-full);
   padding: var(--space-sm) 0;
@@ -964,6 +1001,9 @@ function save() {
 
 .ad-link {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-primary-dark);
