@@ -78,3 +78,57 @@ page {
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 }
+
+/* ============================================================
+   深色模式（跟随系统）
+   暖黑调：与品牌暖色同族，避免冷灰死黑
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  page {
+    /* 品牌色（主色不变，背景改深色调） */
+    --color-primary-bg: #3A2D22;
+
+    /* 状态色（提亮一档保证暗底可读，底色改深色同族） */
+    --color-red: #E0837C;
+    --color-red-bg: #3D2B28;
+    --color-yellow: #E0B465;
+    --color-yellow-bg: #3B3222;
+    --color-green: #7DAA8C;
+    --color-green-bg: #26332B;
+
+    /* 滑动动作色 */
+    --color-swipe-left: #7DAA8C;
+    --color-swipe-right: #C4744A;
+
+    /* 背景色（暖黑分层） */
+    --color-bg-system: #1C1917;
+    --color-bg-page: #201C18;
+    --color-bg-card: #2A2520;
+    --color-bg-secondary: #35302A;
+    --color-bg-input: #2E2924;
+
+    /* 边框 */
+    --color-border: #3E372F;
+    --color-border-light: #332D26;
+
+    /* 文字色（暖白系，层级与浅色对调） */
+    --color-text-primary: #EFEAE2;
+    --color-text-body: #C9C2B8;
+    --color-text-secondary: #948C82;
+    --color-text-placeholder: #6B655E;
+    --color-text-inverse: #FFFFFF;
+
+    /* 阴影（深底改用黑色阴影，强度提高） */
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+    --shadow-card-hover: 0 6px 22px rgba(0, 0, 0, 0.50);
+    --shadow-float: 0 4px 16px rgba(196, 116, 74, 0.25);
+    --shadow-tab: 0 -2px 10px rgba(0, 0, 0, 0.40);
+  }
+
+  /* AppIcon 为 data-uri 渲染，颜色固定不可变；
+     暗色下整体微提亮 + 轻降饱和，让灰/深赭石图标在暗底可读，
+     白色与亮色图标几乎不受影响 */
+  .app-icon {
+    filter: brightness(1.4) saturate(0.85);
+  }
+}

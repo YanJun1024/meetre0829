@@ -32,35 +32,35 @@
     }
   ],
   "tabBar": {
-    "color": "#6B655E",
-    "selectedColor": "#C4744A",
-    "backgroundColor": "#FFFFFF",
-    "borderStyle": "white",
+    "color": "@tabColor",
+    "selectedColor": "@tabSelectedColor",
+    "backgroundColor": "@tabBgColor",
+    "borderStyle": "@tabBorderStyle",
     "list": [
       {
         "pagePath": "pages/review/review",
         "text": "复习",
-        "iconPath": "static/tab-review.png",
-        "selectedIconPath": "static/tab-review-active.png"
+        "iconPath": "@iconReview",
+        "selectedIconPath": "@iconReviewActive"
       },
       {
         "pagePath": "pages/record/record",
         "text": "记录",
-        "iconPath": "static/tab-record.png",
-        "selectedIconPath": "static/tab-record-active.png"
+        "iconPath": "@iconRecord",
+        "selectedIconPath": "@iconRecordActive"
       },
       {
         "pagePath": "pages/profile/profile",
         "text": "我的",
-        "iconPath": "static/tab-profile.png",
-        "selectedIconPath": "static/tab-profile-active.png"
+        "iconPath": "@iconProfile",
+        "selectedIconPath": "@iconProfileActive"
       }
     ]
   },
   "globalStyle": {
-    "navigationBarTextStyle": "black",
+    "navigationBarTextStyle": "@navTxtStyle",
     "navigationBarTitleText": "MeetRe",
-    "navigationBarBackgroundColor": "#FFFFFF",
-    "backgroundColor": "#FFFFFF"
+    "navigationBarBackgroundColor": "@navBgColor",
+    "backgroundColor": "@bgColor"
   }
 }

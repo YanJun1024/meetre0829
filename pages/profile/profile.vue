@@ -278,7 +278,7 @@ const activities = computed<Activity[]>(() => {
     if (t.lastReviewed) {
       list.push({
         icon: "book",
-        color: "#3D5A78",
+        color: "#5A8A6A",
         text: `复习了 #${t.name}`,
         time: timeText(t.lastReviewed),
         ts: t.lastReviewed,

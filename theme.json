@@ -1,0 +1,32 @@
+{
+  "light": {
+    "navBgColor": "#FFFFFF",
+    "navTxtStyle": "black",
+    "bgColor": "#FFFFFF",
+    "tabBgColor": "#FFFFFF",
+    "tabColor": "#6B655E",
+    "tabSelectedColor": "#C4744A",
+    "tabBorderStyle": "white",
+    "iconReview": "static/tab-review.png",
+    "iconReviewActive": "static/tab-review-active.png",
+    "iconRecord": "static/tab-record.png",
+    "iconRecordActive": "static/tab-record-active.png",
+    "iconProfile": "static/tab-profile.png",
+    "iconProfileActive": "static/tab-profile-active.png"
+  },
+  "dark": {
+    "navBgColor": "#1C1917",
+    "navTxtStyle": "white",
+    "bgColor": "#201C18",
+    "tabBgColor": "#1C1917",
+    "tabColor": "#948C82",
+    "tabSelectedColor": "#D49A7A",
+    "tabBorderStyle": "black",
+    "iconReview": "static/tab-review-dark.png",
+    "iconReviewActive": "static/tab-review-active-dark.png",
+    "iconRecord": "static/tab-record-dark.png",
+    "iconRecordActive": "static/tab-record-active-dark.png",
+    "iconProfile": "static/tab-profile-dark.png",
+    "iconProfileActive": "static/tab-profile-active-dark.png"
+  }
+}
