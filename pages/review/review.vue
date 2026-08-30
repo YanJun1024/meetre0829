@@ -45,7 +45,7 @@
 
       <!-- 排名列表（按排名分降序）：左滑词典 / 右滑笔记 -->
       <view class="rank-list">
-        <view v-for="tag in filteredTags" :key="tag.name" class="card-wrap">
+        <view v-for="(tag, index) in filteredTags" :key="tag.name" class="card-wrap">
           <!-- 滑动底色：右滑露出左侧「笔记」(赭石)，左滑露出右侧「词典」(柔和绿) -->
           <view class="swipe-bg">
             <view class="swipe-hint hint-notes">
@@ -75,7 +75,7 @@
               <view class="rank-info">
                 <text class="rank-name">#{{ tag.name }}</text>
                 <text class="rank-meta">{{ tag.noteCount }} 条笔记</text>
-                <text class="swipe-tip">左滑查词典 · 右滑看笔记</text>
+                <text v-if="index === 0" class="swipe-tip">左滑查词典 · 右滑看笔记</text>
               </view>
               <view class="status-dot" :class="`dot-${tag.statusLevel}`" />
             </template>
@@ -168,7 +168,8 @@
         </view>
 
         <view v-if="!filteredTags.length" class="empty">
-          还没有记录，点右下角 + 开始吧
+          <AppIcon name="note" :size="40" color="#C9C2B8" />
+          <text>还没有记录，点右下角 + 开始吧</text>
         </view>
       </view>
     </view>
@@ -495,6 +496,10 @@ function showActions(tag: RankedTag) {
   padding: var(--space-xs) var(--space-md);
 }
 
+.quick-chip:active {
+  background-color: var(--color-bg-input);
+}
+
 .input-placeholder {
   color: var(--color-text-placeholder);
 }
@@ -504,16 +509,21 @@ function showActions(tag: RankedTag) {
   margin-top: var(--space-md);
 }
 
+/* 与 quick-chip 统一：白底描边 + 深赭石文字 */
 .recent-chip {
   display: inline-block;
-  background-color: var(--color-primary-bg);
-  /* 深赭石替代主色，米色底上对比度 3.05 → 4.15 */
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
   color: var(--color-primary-dark);
   font-weight: var(--font-weight-medium);
   border-radius: var(--radius-full);
   padding: var(--space-xs) var(--space-md);
   margin-right: var(--space-sm);
   font-size: var(--font-size-sm);
+}
+
+.recent-chip:active {
+  background-color: var(--color-bg-input);
 }
 
 .rank-list {
@@ -603,6 +613,11 @@ function showActions(tag: RankedTag) {
   transition: none;
 }
 
+/* 按压态：轻米色反馈（不用 transform，避免与滑动平移冲突） */
+.rank-card:active {
+  background-color: var(--color-bg-input);
+}
+
 .rank-no {
   width: 32px;
   font-size: var(--font-size-lg);
@@ -637,18 +652,23 @@ function showActions(tag: RankedTag) {
   width: 12px;
   height: 12px;
   border-radius: var(--radius-full);
+  flex-shrink: 0;
 }
 
+/* 同色浅底光晕：提升小色点的可读性 */
 .dot-red {
   background-color: var(--color-red);
+  box-shadow: 0 0 0 3px var(--color-red-bg);
 }
 
 .dot-yellow {
   background-color: var(--color-yellow);
+  box-shadow: 0 0 0 3px var(--color-yellow-bg);
 }
 
 .dot-green {
   background-color: var(--color-green);
+  box-shadow: 0 0 0 3px var(--color-green-bg);
 }
 
 /* 展开视图（词典/笔记） */
@@ -876,6 +896,10 @@ function showActions(tag: RankedTag) {
 }
 
 .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
   text-align: center;
   color: var(--color-text-secondary);
   padding: var(--space-3xl) 0;

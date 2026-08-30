@@ -709,6 +709,12 @@ function save() {
   color: var(--color-primary);
 }
 
+/* 按压态：轻米色反馈 */
+.scene-chip:active,
+.attach-toggle:active {
+  background-color: var(--color-bg-input);
+}
+
 .custom-scene {
   background-color: var(--color-bg-input);
   border: 1px solid var(--color-border-light);
@@ -750,16 +756,20 @@ function save() {
   flex-shrink: 0;
 }
 
+/* 同色浅底光晕：提升小色点的可读性（与复习页状态灯一致） */
 .dot-familiar {
   background-color: var(--color-green);
+  box-shadow: 0 0 0 3px var(--color-green-bg);
 }
 
 .dot-fuzzy {
   background-color: var(--color-yellow);
+  box-shadow: 0 0 0 3px var(--color-yellow-bg);
 }
 
 .dot-unfamiliar {
   background-color: var(--color-red);
+  box-shadow: 0 0 0 3px var(--color-red-bg);
 }
 
 .preview-count {
@@ -905,6 +915,11 @@ function save() {
   padding: var(--space-xs) var(--space-md);
   font-size: var(--font-size-sm);
   color: var(--color-text-body);
+}
+
+/* 按压态：轻米色反馈（置于 .recording 之前，录音中红底不被覆盖） */
+.attach-chip:active {
+  background-color: var(--color-bg-input);
 }
 
 .attach-chip.recording {

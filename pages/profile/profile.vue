@@ -480,6 +480,11 @@ function migrateAttachments() {
   color: var(--color-text-body);
 }
 
+/* 按压态：轻米色反馈 */
+.cell:active {
+  background-color: var(--color-bg-input);
+}
+
 .cell-arrow {
   color: var(--color-text-placeholder);
 }

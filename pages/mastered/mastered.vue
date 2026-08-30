@@ -39,7 +39,12 @@
         </view>
 
         <view v-if="!filteredTags.length" class="empty">
-          {{ keyword ? "没有匹配的已掌握标签" : "还没有已掌握的词，长按复习页卡片标记吧" }}
+          <AppIcon name="check" :size="40" color="#C9C2B8" />
+          <text>{{
+            keyword
+              ? "没有匹配的已掌握标签"
+              : "还没有已掌握的词，长按复习页卡片标记吧"
+          }}</text>
         </view>
       </view>
     </view>
@@ -186,6 +191,11 @@ function formatTime(ts?: number): string {
   margin-bottom: var(--space-md);
 }
 
+/* 按压态：轻米色反馈 */
+.mastered-card:active {
+  background-color: var(--color-bg-input);
+}
+
 .card-info {
   flex: 1;
   display: flex;
@@ -225,6 +235,10 @@ function formatTime(ts?: number): string {
 }
 
 .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
   text-align: center;
   color: var(--color-text-secondary);
   padding: var(--space-3xl) 0;
