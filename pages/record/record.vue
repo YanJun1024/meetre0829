@@ -278,7 +278,7 @@ function goTagDetail(name: string) {
 }
 
 function goEarlier() {
-  uni.switchTab({ url: "/pages/review/review" });
+  uni.navigateTo({ url: "/pages/timeline/timeline" });
 }
 
 /** 老朋友提醒：红档中最久未翻看的词，关闭后当日不再出现 */

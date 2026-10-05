@@ -101,6 +101,12 @@
         <text class="cell-arrow">›</text>
       </view>
 
+      <!-- 按时间看：整本相遇日记 -->
+      <view class="cell" @click="showTimeline">
+        <text>📖 按时间看（{{ meetCount }}笔）</text>
+        <text class="cell-arrow">›</text>
+      </view>
+
       <!-- 设置区 -->
       <view class="cell">
         <text>设置</text>
@@ -336,6 +342,10 @@ function showMastered() {
 
 function showSnoozed() {
   uni.navigateTo({ url: "/pages/snoozed/snoozed" });
+}
+
+function showTimeline() {
+  uni.navigateTo({ url: "/pages/timeline/timeline" });
 }
 </script>
 

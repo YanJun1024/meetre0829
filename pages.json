@@ -31,6 +31,12 @@
       }
     },
     {
+      "path": "pages/timeline/timeline",
+      "style": {
+        "navigationBarTitleText": "按时间看"
+      }
+    },
+    {
       "path": "pages/tag-detail/tag-detail",
       "style": {
         "navigationBarTitleText": "相遇记录"
