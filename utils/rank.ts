@@ -1,4 +1,4 @@
-import type { Note, RankedTag, Tag } from "@/types";
+import type { Familiarity, Note, RankedTag, Tag } from "@/types";
 
 // =============================================================
 // MeetRe 排名计算核心逻辑（v1.5 极简版）
@@ -76,4 +76,35 @@ export function getStatusLevel(
     return "green";
   }
   return "yellow";
+}
+
+/**
+ * 有效熟悉度（v2.0 熟悉度自动降级 · 惰性显示层）
+ * 存储值不动，仅展示时计算：
+ * - 手动标记（familiaritySource === 'user'）永不自动降，原样返回
+ * - 行为推断的标记，超过 30 天无互动逐级降档：🟢→🟡、🟡→🔴（🔴 到底）
+ * - 互动 = 记新笔记 / 查词典 / 回看 / 标记本身，任何互动重置 30 天计时
+ */
+export function effectiveFamiliarity(
+  tag: Tag,
+  notes: Note[],
+  now: number = Date.now()
+): Familiarity | null {
+  const fam = tag.familiarity;
+  if (!fam || tag.familiaritySource === "user" || fam === "unfamiliar") {
+    return fam;
+  }
+
+  const lastNoteTime = notes
+    .filter((n) => n.tags.includes(tag.name) && !n.isDeleted)
+    .reduce((max, n) => Math.max(max, n.createTime), 0);
+  const lastInteraction = Math.max(
+    lastNoteTime,
+    tag.lastReviewed || 0,
+    tag.familiarityUpdatedAt || 0
+  );
+
+  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+  if (now - lastInteraction < thirtyDays) return fam;
+  return fam === "familiar" ? "fuzzy" : "unfamiliar";
 }

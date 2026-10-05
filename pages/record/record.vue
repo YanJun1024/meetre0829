@@ -27,9 +27,9 @@
             <text>你之前记过 #{{ previewTag.name }}</text>
             <!-- 熟悉度徽章（v2.0 3.2.3）：彩色小圆点，点击展开调整面板；未标记过不显示 -->
             <view
-              v-if="previewTag.tag.familiarity"
+              v-if="previewFam"
               class="fam-dot"
-              :class="`fam-${previewTag.tag.familiarity}`"
+              :class="`fam-${previewFam}`"
               @click.stop="famPickerOpen = !famPickerOpen"
             />
           </view>
@@ -41,7 +41,7 @@
             v-for="opt in famOptions"
             :key="'fam:' + opt.value"
             class="fam-picker-opt"
-            :class="{ active: previewTag.tag.familiarity === opt.value }"
+            :class="{ active: previewFam === opt.value }"
             @click="pickFamiliarity(opt.value)"
           >
             <view class="fam-dot" :class="`fam-${opt.value}`" />
@@ -208,6 +208,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { parseTags, useNotesStore } from "@/store/notes";
 import { useUserStore } from "@/store/user";
 import type { Familiarity } from "@/types";
+import { effectiveFamiliarity } from "@/utils/rank";
 import { compressImage } from "@/utils/media";
 import AttachmentList from "@/components/AttachmentList.vue";
 import AppIcon from "@/components/AppIcon.vue";
@@ -241,6 +242,13 @@ const previewTag = computed(() => {
     .sort((a, b) => b.createTime - a.createTime);
   return { name, tag, count: notes.length, latestList: notes.slice(0, 2) };
 });
+
+/** 有效熟悉度（v2.0 惰性降级）：手动标记原样，推断标记超 30 天无互动逐级降档 */
+const previewFam = computed(() =>
+  previewTag.value
+    ? effectiveFamiliarity(previewTag.value.tag, store.notes)
+    : null
+);
 
 // =============================================================
 // 查看全部抽屉（开发文档 Tab2：半屏抽屉，完整笔记列表）
