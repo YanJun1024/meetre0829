@@ -25,8 +25,28 @@
           <view class="preview-title">
             <AppIcon name="book" :size="14" color="#9A7209" />
             <text>你之前记过 #{{ previewTag.name }}</text>
+            <!-- 熟悉度徽章（v2.0 3.2.3）：彩色小圆点，点击展开调整面板；未标记过不显示 -->
+            <view
+              v-if="previewTag.tag.familiarity"
+              class="fam-dot"
+              :class="`fam-${previewTag.tag.familiarity}`"
+              @click.stop="famPickerOpen = !famPickerOpen"
+            />
           </view>
           <text class="preview-count">（{{ previewTag.count }}条）</text>
+        </view>
+        <!-- 熟悉度调整面板：点圆点展开，三选一 -->
+        <view v-if="famPickerOpen" class="fam-picker">
+          <view
+            v-for="opt in famOptions"
+            :key="'fam:' + opt.value"
+            class="fam-picker-opt"
+            :class="{ active: previewTag.tag.familiarity === opt.value }"
+            @click="pickFamiliarity(opt.value)"
+          >
+            <view class="fam-dot" :class="`fam-${opt.value}`" />
+            <text>{{ opt.label }}</text>
+          </view>
         </view>
         <!-- 最近 2 条笔记摘要（开发文档 Tab2 规格） -->
         <text
@@ -235,6 +255,24 @@ const drawerNotes = computed(() =>
         .sort((a, b) => b.createTime - a.createTime)
     : []
 );
+
+// =============================================================
+// 熟悉度徽章（v2.0 3.2.3）：预览区圆点点击展开，三选一调整
+// =============================================================
+
+const famPickerOpen = ref(false);
+
+const famOptions: { value: Familiarity; label: string }[] = [
+  { value: "familiar", label: "😎 能" },
+  { value: "fuzzy", label: "😅 有点悬" },
+  { value: "unfamiliar", label: "🤔 不能" },
+];
+
+function pickFamiliarity(f: Familiarity) {
+  if (!previewTag.value) return;
+  store.setFamiliarity(previewTag.value.name, f);
+  famPickerOpen.value = false;
+}
 
 // 自动识别释义提示（3.6.5 入口二）：保存时命中释义句式才出现
 const autoDefHint = ref<{ name: string; text: string } | null>(null);
@@ -867,6 +905,58 @@ function save() {
   font-size: var(--font-size-xs);
   color: var(--color-primary);
   margin-top: var(--space-xs);
+}
+
+/* 熟悉度徽章（v2.0 3.2.3）：彩色小圆点，配色与复习页状态灯一致 */
+.fam-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin: 0 3px; /* 给 3px 光晕留出空间 */
+}
+
+.fam-unfamiliar {
+  background-color: var(--color-red);
+  box-shadow: 0 0 0 3px var(--color-red-bg);
+}
+
+.fam-fuzzy {
+  background-color: var(--color-yellow);
+  box-shadow: 0 0 0 3px var(--color-yellow-bg);
+}
+
+.fam-familiar {
+  background-color: var(--color-green);
+  box-shadow: 0 0 0 3px var(--color-green-bg);
+}
+
+/* 熟悉度调整面板：三选一横排，选中项淡金底 */
+.fam-picker {
+  display: flex;
+  gap: var(--space-sm);
+  padding-top: var(--space-xs);
+}
+
+.fam-picker-opt {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-body);
+}
+
+.fam-picker-opt.active {
+  background-color: var(--color-primary-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-medium);
 }
 
 /* 查看全部抽屉：半透明遮罩 + 底部白色半屏面板 */
