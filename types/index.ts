@@ -52,5 +52,7 @@ export interface RankedTag extends Tag {
   rank: number;
   score: number;
   noteCount: number;
+  /** 最近相遇时间（最后一笔笔记的时间，无笔记为 0） */
+  lastTime: number;
   statusLevel: "red" | "yellow" | "green";
 }

@@ -1,12 +1,18 @@
 <template>
   <view class="page">
     <view class="content">
-      <!-- 主输入框：白色操作容器，包住浅米色输入井 -->
+      <!-- 问候：像坐下来写字时，有人轻声打招呼 -->
+      <view class="greeting">
+        <text class="greet-main">{{ greeting }} ☁️</text>
+        <text class="greet-sub">今天遇到什么新词了吗？</text>
+      </view>
+
+      <!-- 主输入框：便签纸卡片，包住浅米色输入井 -->
       <view class="input-panel">
         <textarea
           v-model="content"
           class="content-input"
-          placeholder="今天在哪遇到的？写下来吧"
+          placeholder="随手写下来，用 #单词 做个记号吧"
           placeholder-class="input-placeholder"
           :maxlength="-1"
           auto-height
@@ -17,15 +23,9 @@
       <view v-if="previewTag" class="preview-panel">
         <view class="preview-head">
           <view class="preview-title">
-            <AppIcon name="book" :size="14" color="#A85F3A" />
+            <AppIcon name="book" :size="14" color="#9A7209" />
             <text>你之前记过 #{{ previewTag.name }}</text>
           </view>
-          <view
-            v-if="previewTag.tag.familiarity"
-            class="preview-dot"
-            :class="`dot-${previewTag.tag.familiarity}`"
-            @click="adjustFamiliarity(previewTag.name)"
-          />
           <text class="preview-count">（{{ previewTag.count }}条）</text>
         </view>
         <!-- 最近 2 条笔记摘要（开发文档 Tab2 规格） -->
@@ -42,7 +42,7 @@
       </view>
 
       <!-- 场景选择 -->
-      <view class="scene-title">在什么场景遇到的？</view>
+      <view class="scene-title">是在什么场景遇到的？</view>
       <view class="scene-row">
         <view
           v-for="s in scenes"
@@ -74,14 +74,14 @@
         <template v-if="attachExpanded">
           <view class="attach-chip" @click="chooseImages">
             <AppIcon name="camera" :size="16" />
-            <text>添加图片</text>
+            <text>添加照片</text>
           </view>
           <view v-if="!recording" class="attach-chip" @click="startRecord">
             <AppIcon name="mic" :size="16" />
             <text>添加录音</text>
           </view>
           <view v-else class="attach-chip recording" @click="stopRecord">
-            <AppIcon name="stop" :size="16" color="#FFFFFF" />
+            <AppIcon name="stop" :size="16" color="#FFFEF5" />
             <text>停止录音（{{ recordSeconds }}s）</text>
           </view>
         </template>
@@ -103,37 +103,44 @@
 
       <!-- 自动识别释义提示（开发文档 3.6.5 入口二）：2.5s 自动消失，点击去详情 -->
       <view v-if="autoDefHint" class="autodef-bar" @click="goAutoDef">
-        <AppIcon name="book" :size="14" color="#A85F3A" />
+        <AppIcon name="book" :size="14" color="#9A7209" />
         <text class="ad-text"
           >已记下你对 #{{ autoDefHint.name }} 的理解：{{ autoDefHint.text }}</text
         >
         <view class="ad-link">
-          <AppIcon name="edit" :size="13" color="#A85F3A" />
+          <AppIcon name="edit" :size="13" color="#9A7209" />
           <text>看看</text>
         </view>
       </view>
-    </view>
 
-    <!-- 保存后轻反馈条（开发文档 3.2.2 v1.5）：非弹窗，2.5s 自动消失 -->
-    <view v-if="feedback.visible" class="feedback-bar">
-      <view class="fb-title">
-        <AppIcon name="check" :size="15" color="#5A8A6A" />
-        <text>已保存 #{{ feedback.tagName }}</text>
+      <!-- 今天的相遇：今天写的便签 -->
+      <view v-if="todayNotes.length" class="today-section">
+        <text class="section-label">今天的相遇</text>
+        <view
+          v-for="n in todayNotes"
+          :key="'today:' + (n._id || n.id)"
+          class="today-card"
+          @click="goTagDetail(n.tags[0] || '')"
+        >
+          <view class="today-head">
+            <text v-if="n.tags[0]" class="today-tag">#{{ n.tags[0] }}</text>
+            <text class="today-time">{{ timeHM(n.createTime) }}</text>
+          </view>
+          <text class="today-content">{{ n.content }}</text>
+        </view>
+
+        <view class="earlier-link" @click="goEarlier">
+          <text>查看更早的 →</text>
+        </view>
       </view>
-      <text class="fb-question">这个词你现在能说出来吗？</text>
-      <view class="fb-options">
-        <view class="fb-chip" @click="answerFeedback('familiar')">
-          <AppIcon name="faceGood" :size="16" color="#A85F3A" />
-          <text>能</text>
+
+      <!-- 老朋友提醒：一位好久没见的朋友，当日可关闭 -->
+      <view v-if="oldFriend" class="oldfriend-bar">
+        <view class="of-text" @click="goOldFriend">
+          <AppIcon name="bulb" :size="14" color="#9A7209" />
+          <text>这位老朋友 #{{ oldFriend }} 好久没见了</text>
         </view>
-        <view class="fb-chip" @click="answerFeedback('fuzzy')">
-          <AppIcon name="faceMeh" :size="16" color="#A85F3A" />
-          <text>有点悬</text>
-        </view>
-        <view class="fb-chip" @click="answerFeedback('unfamiliar')">
-          <AppIcon name="faceBad" :size="16" color="#A85F3A" />
-          <text>不能</text>
-        </view>
+        <text class="of-close" @click="dismissOldFriend">✕</text>
       </view>
     </view>
 
@@ -162,8 +169,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
-import type { Familiarity } from "@/types";
+import { computed, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
 import { parseTags, useNotesStore } from "@/store/notes";
 import { useUserStore } from "@/store/user";
 import { compressImage } from "@/utils/media";
@@ -177,6 +184,16 @@ const userStore = useUserStore();
 const content = ref("");
 const scene = ref("");
 const customScene = ref("");
+
+/** 时段问候（首页：你此刻坐下来写字的桌子） */
+const greeting = computed(() => {
+  const h = new Date().getHours();
+  if (h < 5) return "夜深了";
+  if (h < 11) return "早上好";
+  if (h < 14) return "中午好";
+  if (h < 18) return "下午好";
+  return "晚上好";
+});
 
 /** 已有笔记预览（3.2.3 v2.0）：取输入中的第一个标签，无历史不显示；摘要取最近 2 条 */
 const previewTag = computed(() => {
@@ -203,31 +220,6 @@ const drawerNotes = computed(() =>
         .sort((a, b) => b.createTime - a.createTime)
     : []
 );
-
-/** 点击圆点手动调整熟悉度（用户手动 > 行为推断，开发文档 3.2） */
-function adjustFamiliarity(name: string) {
-  uni.showActionSheet({
-    itemList: ["熟", "有点印象", "不熟"],
-    success: ({ tapIndex }) => {
-      const levels: Familiarity[] = ["familiar", "fuzzy", "unfamiliar"];
-      store.setFamiliarity(name, levels[tapIndex]);
-      uni.showToast({ title: "已更新", icon: "none" });
-    },
-  });
-}
-
-// =============================================================
-// 保存后反馈（3.2.2 v1.5）频率控制
-// 当天 1-2 次记录才弹 / 该词已有熟悉度不弹 / 连续 3 次未点击静默 3 天
-// =============================================================
-
-const SAVE_STAT_KEY = "meetre_save_stat";
-const FB_MISSES_KEY = "meetre_fb_misses";
-const FB_MUTED_KEY = "meetre_fb_muted_until";
-const FEEDBACK_DURATION = 2500; // 2.5s 自动消失
-
-const feedback = reactive({ visible: false, tagName: "" });
-let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 自动识别释义提示（3.6.5 入口二）：保存时命中释义句式才出现
 const autoDefHint = ref<{ name: string; text: string } | null>(null);
@@ -260,41 +252,63 @@ function dayKey(ts: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** 尝试展示反馈条；展示则返回 true（保存 toast 让位给反馈条） */
-function tryShowFeedback(tagName: string, saveCount: number): boolean {
-  const tag = store.tags.find((t) => t.name === tagName);
-  const mutedUntil = uni.getStorageSync(FB_MUTED_KEY) || 0;
-  const canShow =
-    saveCount <= 2 && !tag?.familiarity && Date.now() >= mutedUntil;
-  if (!canShow) return false;
-
-  feedback.tagName = tagName;
-  feedback.visible = true;
-  feedbackTimer = setTimeout(() => {
-    // 未点击自动消失：计入连续未点击，满 3 次静默 3 天
-    feedback.visible = false;
-    feedbackTimer = null;
-    const misses = (uni.getStorageSync(FB_MISSES_KEY) || 0) + 1;
-    if (misses >= 3) {
-      uni.setStorageSync(FB_MISSES_KEY, 0);
-      uni.setStorageSync(FB_MUTED_KEY, Date.now() + 3 * 24 * 60 * 60 * 1000);
-    } else {
-      uni.setStorageSync(FB_MISSES_KEY, misses);
-    }
-  }, FEEDBACK_DURATION);
-  return true;
+function timeHM(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** 点击：用户手动标记熟悉度（优先级高于行为推断） */
-function answerFeedback(level: Familiarity) {
-  if (feedbackTimer) {
-    clearTimeout(feedbackTimer);
-    feedbackTimer = null;
-  }
-  feedback.visible = false;
-  uni.setStorageSync(FB_MISSES_KEY, 0); // 点击重置连续未点击计数
-  store.setFamiliarity(feedback.tagName, level);
-  uni.showToast({ title: "已记录", icon: "none" });
+// =============================================================
+// 今天的相遇 / 老朋友提醒（v1.5 首页结构）
+// =============================================================
+
+/** 今天写的便签，新的在前 */
+const todayNotes = computed(() => {
+  const key = dayKey(Date.now());
+  return store.notes
+    .filter((n) => !n.isDeleted && dayKey(n.createTime) === key)
+    .sort((a, b) => b.createTime - a.createTime);
+});
+
+function goTagDetail(name: string) {
+  if (!name) return;
+  uni.navigateTo({
+    url: `/pages/tag-detail/tag-detail?name=${encodeURIComponent(name)}`,
+  });
+}
+
+function goEarlier() {
+  uni.switchTab({ url: "/pages/review/review" });
+}
+
+/** 老朋友提醒：红档中最久未翻看的词，关闭后当日不再出现 */
+const HOME_VISIT_KEY = "meetre_home_visit_muted";
+
+const homeVisitMuted = ref(
+  uni.getStorageSync(HOME_VISIT_KEY) === dayKey(Date.now())
+);
+
+// 回到首页时重新读当日关闭状态（跨天自动复位）
+onShow(() => {
+  homeVisitMuted.value =
+    uni.getStorageSync(HOME_VISIT_KEY) === dayKey(Date.now());
+});
+
+const oldFriend = computed(() => {
+  if (homeVisitMuted.value) return "";
+  const reds = [...store.rankedTags]
+    .filter((t) => t.statusLevel === "red")
+    .sort((a, b) => (a.lastReviewed || 0) - (b.lastReviewed || 0));
+  return reds[0]?.name || "";
+});
+
+function goOldFriend() {
+  if (oldFriend.value) goTagDetail(oldFriend.value);
+}
+
+function dismissOldFriend() {
+  homeVisitMuted.value = true;
+  uni.setStorageSync(HOME_VISIT_KEY, dayKey(Date.now()));
 }
 
 // =============================================================
@@ -605,35 +619,19 @@ function save() {
   audios.value = [];
   attachExpanded.value = false;
 
-  // 当天记录计数（反馈条频率控制）
-  const stat = uni.getStorageSync(SAVE_STAT_KEY) || { date: "", count: 0 };
-  const today = dayKey(Date.now());
-  const saveCount = stat.date === today ? stat.count + 1 : 1;
-  uni.setStorageSync(SAVE_STAT_KEY, { date: today, count: saveCount });
-
   if (!tags.length) {
     uni.showToast({ title: "已保存", icon: "none" });
     return;
   }
 
-  // 已掌握标签记新笔记 → 确认重新加入复习（开发文档 3.3.2）
+  // 已掌握 / 休息中的词记了新笔记 → 自动回到活跃列表（v1.5：行为比标记更诚实）
   const tag = store.tags.find((t) => t.name === tags[0]);
-  if (tag?.status === "mastered") {
-    uni.showModal({
-      title: "重新加入复习吗？",
-      content: `笔记已保存。#${tags[0]} 已在已掌握词库，重新加入后将继续参与排名复习`,
-      confirmText: "加入",
-      cancelText: "暂不",
-      success: ({ confirm }) => {
-        if (confirm) store.setTagStatus(tags[0], "learning");
-      },
-    });
-    return; // 恢复确认优先，本次不再弹熟悉度反馈
+  if (tag && (tag.status === "mastered" || tag.status === "snoozed")) {
+    store.setTagStatus(tags[0], "learning");
+    uni.showToast({ title: "这位老朋友又回来啦", icon: "none", duration: 2000 });
+    return;
   }
 
-  if (tryShowFeedback(tags[0], saveCount)) {
-    return; // 反馈条已包含「已保存」提示
-  }
   uni.showToast({ title: `已保存 #${tags[0]}` });
 }
 </script>
@@ -653,9 +651,31 @@ function save() {
   flex-direction: column;
 }
 
-/* 操作交互层：白色容器，与米色内容层形成层次 */
+/* 问候语：22px 暖墨色，行高 1.3，像翻开本子时的第一行 */
+.greeting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-lg);
+}
+
+.greet-main {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.greet-sub {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* 便签纸卡片：偏暖的白 + 若有若无的折痕边 + 暖棕淡影 */
 .input-panel {
   background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-sm);
   box-shadow: var(--shadow-card);
@@ -665,15 +685,15 @@ function save() {
   margin-top: var(--space-md);
 }
 
-/* 输入框内部：浅米色输入井，嵌在白色容器中 */
+/* 输入井：浅米底，8px 圆角，不抢卡片的戏 */
 .content-input {
   background-color: var(--color-bg-input);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: var(--space-lg);
   min-height: 200px;
   width: auto;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-md);
+  line-height: 1.6;
   color: var(--color-text-body);
   box-sizing: border-box;
 }
@@ -695,38 +715,37 @@ function save() {
 }
 
 .scene-chip {
-  background-color: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-full);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-lg);
   font-size: var(--font-size-sm);
   color: var(--color-text-body);
 }
 
+/* 选中：淡墨金字底，像用淡墨水标出的场景 */
 .scene-chip.active {
   background-color: var(--color-primary-bg);
-  border-color: var(--color-primary);
   color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
 }
 
 /* 按压态：轻米色反馈 */
 .scene-chip:active,
 .attach-toggle:active {
-  background-color: var(--color-bg-input);
+  background-color: var(--color-primary-bg);
 }
 
 .custom-scene {
   background-color: var(--color-bg-input);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: var(--space-md) var(--space-lg);
   font-size: var(--font-size-base);
 }
 
-/* 已有笔记预览（v2.0）：轻量米色卡片，不抢输入焦点 */
+/* 已有笔记预览（v2.0）：浅米纸片，不抢输入焦点 */
 .preview-panel {
   margin-top: var(--space-md);
-  background-color: var(--color-bg-page);
+  background-color: var(--color-bg-secondary);
   border-radius: var(--radius-md);
   padding: var(--space-md);
   display: flex;
@@ -747,29 +766,6 @@ function save() {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-primary-dark);
-}
-
-.preview-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: var(--radius-full);
-  flex-shrink: 0;
-}
-
-/* 同色浅底光晕：提升小色点的可读性（与复习页状态灯一致） */
-.dot-familiar {
-  background-color: var(--color-green);
-  box-shadow: 0 0 0 3px var(--color-green-bg);
-}
-
-.dot-fuzzy {
-  background-color: var(--color-yellow);
-  box-shadow: 0 0 0 3px var(--color-yellow-bg);
-}
-
-.dot-unfamiliar {
-  background-color: var(--color-red);
-  box-shadow: 0 0 0 3px var(--color-red-bg);
 }
 
 .preview-count {
@@ -839,7 +835,7 @@ function save() {
 }
 
 .drawer-item {
-  background-color: var(--color-bg-page);
+  background-color: var(--color-bg-secondary);
   border-radius: var(--radius-md);
   padding: var(--space-md);
   margin-bottom: var(--space-sm);
@@ -866,13 +862,17 @@ function save() {
   font-size: var(--font-size-sm);
 }
 
+/* 主按钮：暗金印章按在暖纸上——胶囊形、暖白字、金色淡影 */
 .save-btn {
   margin-top: var(--space-2xl);
+  height: 40px;
+  line-height: 40px;
+  padding: 0;
   background-color: var(--color-primary);
   color: var(--color-text-inverse);
-  border-radius: var(--radius-full);
-  /* 白字压赭石底需按大字号标准（WCAG AA Large ≥3:1） */
-  font-size: var(--font-size-lg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-float);
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -909,17 +909,16 @@ function save() {
   display: flex;
   align-items: center;
   gap: 4px;
-  background-color: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-full);
-  padding: var(--space-xs) var(--space-md);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 6px var(--space-md);
   font-size: var(--font-size-sm);
   color: var(--color-text-body);
 }
 
-/* 按压态：轻米色反馈（置于 .recording 之前，录音中红底不被覆盖） */
+/* 按压态：淡金底反馈（置于 .recording 之前，录音中红底不被覆盖） */
 .attach-chip:active {
-  background-color: var(--color-bg-input);
+  background-color: var(--color-primary-bg);
 }
 
 .attach-chip.recording {
@@ -936,61 +935,10 @@ function save() {
   border: none;
 }
 
+/* 印章按下：颜色加深 + 轻缩 150ms */
 .save-btn:active {
   background-color: var(--color-primary-dark);
-}
-
-/* 保存后轻反馈条：底部卡片，非弹窗不阻断 */
-.feedback-bar {
-  position: fixed;
-  left: var(--space-lg);
-  right: var(--space-lg);
-  bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
-  background-color: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  box-shadow: var(--shadow-card);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  z-index: 998;
-}
-
-.fb-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-primary-dark);
-}
-
-.fb-question {
-  font-size: var(--font-size-base);
-  color: var(--color-text-primary);
-}
-
-.fb-options {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.fb-chip {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  background-color: var(--color-primary-bg);
-  border-radius: var(--radius-full);
-  padding: var(--space-sm) 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-primary-dark);
-  font-weight: var(--font-weight-medium);
-}
-
-.fb-chip:active {
-  background-color: var(--color-bg-input);
+  transform: scale(0.97);
 }
 
 /* 自动识别释义提示条（3.6.5 入口二）：文档流内轻条，不遮挡底部反馈条 */
@@ -1022,5 +970,100 @@ function save() {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-primary-dark);
+}
+
+/* 今天的相遇：今天写的便签小卡片 */
+.today-section {
+  margin-top: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.section-label {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.today-card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md) var(--space-lg);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.today-card:active {
+  background-color: var(--color-bg-input);
+}
+
+.today-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.today-tag {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-dark);
+}
+
+.today-time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-placeholder);
+  flex-shrink: 0;
+}
+
+.today-content {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.earlier-link {
+  align-self: flex-end;
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-xs) 0;
+}
+
+/* 老朋友提醒：轻声一句，可关 */
+.oldfriend-bar {
+  margin-top: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.of-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-close {
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-xs);
 }
 </style>

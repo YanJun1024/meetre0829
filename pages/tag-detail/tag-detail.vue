@@ -11,7 +11,7 @@
           </view>
         </view>
         <text class="head-meta">
-          {{ notes.length }} 条笔记 · 最近复习 {{ formatTime(tag?.lastReviewed) }}
+          你们已相遇 {{ notes.length }} 次 · 最近相遇 {{ formatTime(tag?.lastReviewed) }}
         </text>
       </view>
 
@@ -23,30 +23,36 @@
         </view>
         <text class="def-text" :class="{ muted: defView.source === 'sys' }">{{ defView.text || "还没有释义" }}</text>
         <view v-if="defView.source === 'sys'" class="def-tip">
-          <AppIcon name="bulb" :size="13" color="#6B655E" />
+          <AppIcon name="bulb" :size="13" color="#7A6F5E" />
           <text>这是系统释义，换成你自己的话会更记得住</text>
         </view>
         <view class="def-edit" @click="openEditor">
-          <AppIcon name="edit" :size="13" color="#A85F3A" />
+          <AppIcon name="edit" :size="13" color="#9A7209" />
           <text>改一下</text>
         </view>
       </view>
 
-      <!-- 全部笔记 -->
+      <!-- 相遇记录：从上到下 = 从新到旧 -->
       <view class="notes-card">
-        <text class="def-label">全部笔记</text>
+        <text class="def-label">相遇记录</text>
         <view v-if="notes.length" class="notes-list">
-          <view v-for="note in notes" :key="note.id" class="note-item">
+          <view v-for="(note, i) in notes" :key="'n:' + (note._id || note.id)" class="note-item">
             <text class="note-content">{{ note.content }}</text>
             <AttachmentList
               :images="note.images || []"
               :audios="note.audios || []"
             />
-            <text class="note-time">{{ formatTime(note.createTime) }}</text>
+            <view class="note-meta">
+              <text class="note-time">{{ formatTime(note.createTime) }}</text>
+              <!-- 里程碑小星星：第 10/20/50 次相遇，悄悄出现 -->
+              <text v-if="isMilestone(i)" class="note-star">✦ 第 {{ meetingNo(i) }} 次相遇</text>
+              <!-- 最底部节点：初遇标记 -->
+              <text v-if="i === notes.length - 1" class="note-first">🌱 第一次遇见你</text>
+            </view>
           </view>
         </view>
         <view v-else class="def-empty">
-          <text class="def-empty-tip">还没有笔记，点右下角 + 记一条吧</text>
+          <text class="def-empty-tip">还没有相遇记录，去记第一笔吧</text>
         </view>
       </view>
     </view>
@@ -103,8 +109,8 @@ const notes = computed(() =>
 const statusText = computed(() => {
   const s = tag.value?.status;
   if (s === "mastered") return "已掌握";
-  if (s === "snoozed") return "暂时不想看";
-  return "学习中";
+  if (s === "snoozed") return "休息中";
+  return "相遇中";
 });
 
 /** 三层释义视图：用户释义 > 自动提取 > 系统释义 */
@@ -143,6 +149,16 @@ function saveEditor() {
   uni.showToast({ title: "释义已保存" });
 }
 
+/** 相遇序号：从初遇（最旧一条）数起，最旧 = 第 1 次 */
+function meetingNo(index: number): number {
+  return notes.value.length - index;
+}
+
+/** 里程碑：第 10 / 20 / 50 次相遇的节点 */
+function isMilestone(index: number): boolean {
+  return [10, 20, 50].includes(meetingNo(index));
+}
+
 function formatTime(ts?: number): string {
   if (!ts) return "—";
   const d = new Date(ts);
@@ -164,9 +180,10 @@ function formatTime(ts?: number): string {
   box-sizing: border-box;
 }
 
-/* 头部卡片 */
+/* 头部卡片：便签纸 + 折痕边 */
 .head-card {
   background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   box-shadow: var(--shadow-card);
@@ -232,6 +249,7 @@ function formatTime(ts?: number): string {
 /* 释义卡片：米色纸面 */
 .def-card {
   background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   box-shadow: var(--shadow-card);
@@ -293,6 +311,7 @@ function formatTime(ts?: number): string {
 /* 笔记卡片 */
 .notes-card {
   background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   box-shadow: var(--shadow-card);
@@ -325,6 +344,25 @@ function formatTime(ts?: number): string {
 .note-time {
   font-size: var(--font-size-xs);
   color: var(--color-text-placeholder);
+}
+
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 里程碑星星：安静，不张扬 */
+.note-star {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+}
+
+/* 初遇标记：底部微微暖意 */
+.note-first {
+  font-size: var(--font-size-xs);
+  color: var(--color-green);
 }
 
 /* 空状态 */
@@ -399,7 +437,7 @@ function formatTime(ts?: number): string {
 
 .editor-btn.save {
   background-color: var(--color-primary);
-  color: #ffffff;
+  color: var(--color-text-inverse);
   font-weight: var(--font-weight-semibold);
 }
 

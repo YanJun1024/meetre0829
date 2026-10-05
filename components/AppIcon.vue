@@ -13,7 +13,7 @@ import { computed } from "vue";
  * 通用线性图标组件：SVG data-uri 渲染，替代 emoji
  * 统一 24x24 viewBox / 2px 圆头描边，跨机型渲染一致
  * 颜色需传具体色值（data-uri 内不继承 CSS 变量），
- * 常用色值：#6B655E 辅助灰 / #A85F3A 深赭石(primary-dark) / #FFFFFF 反色
+ * 常用色值：#7A6F5E 淡墨(secondary) / #9A7209 深暗金(primary-dark) / #FFFEF5 反色
  */
 const ICONS: Record<string, string> = {
   // 打开的书：复习 / 词典
@@ -52,7 +52,7 @@ const ICONS: Record<string, string> = {
 
 const props = withDefaults(
   defineProps<{ name: string; size?: number; color?: string }>(),
-  { size: 16, color: "#6B655E" }
+  { size: 16, color: "#7A6F5E" }
 );
 
 const src = computed(() => {

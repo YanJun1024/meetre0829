@@ -8,34 +8,34 @@
           <input
             v-model="keyword"
             class="search-input"
-            placeholder="搜索已掌握的词"
+            placeholder="搜索休息中的词"
             placeholder-class="input-placeholder"
           />
         </view>
       </view>
 
-      <!-- 已掌握列表（按掌握时间降序） -->
+      <!-- 休息中列表（按回来时间升序：最早回来的排前面） -->
       <view v-if="filteredTags.length" class="quote-tip">
         <AppIcon name="bulb" :size="13" color="#7A6F5E" />
-        <text>一个词在不同的场景里多遇见几次，就会慢慢熟起来</text>
+        <text>休息够了，它们会自己回到书架上</text>
       </view>
 
-      <view class="mastered-list">
+      <view class="snoozed-list">
         <view
           v-for="tag in filteredTags"
-          :key="tag._id || ('ms:' + tag.name)"
-          class="mastered-card"
-          @click="viewDict(tag.name)"
+          :key="tag._id || ('sn:' + tag.name)"
+          class="snoozed-card"
+          @click="viewDetail(tag.name)"
           @longpress="confirmRestore(tag.name)"
         >
           <view class="card-info">
             <text class="card-name">#{{ tag.name }}</text>
             <text class="card-meta">
-              相遇 {{ noteCount(tag.name) }} 次 · 收于 {{ formatTime(tag.masteredAt) }}
+              相遇 {{ noteCount(tag.name) }} 次 · {{ backText(tag.snoozeExpireAt) }}
             </text>
-            <text class="card-tip">点击查看词典 · 长按放回我的词</text>
+            <text class="card-tip">点击查看相遇记录 · 长按提前放回</text>
           </view>
-          <view class="check-badge">✓</view>
+          <view class="moon-badge">🌙</view>
         </view>
 
         <view v-if="!filteredTags.length" class="empty">
@@ -43,7 +43,7 @@
           <text>{{
             keyword
               ? "没找到这个词"
-              : "还没有读完的书。在「我的词」里点一张卡片，就能把它收进来"
+              : "还没有休息中的词。在「我的词」里点一张卡片，就能让它休息一会儿"
           }}</text>
         </view>
       </view>
@@ -59,25 +59,28 @@ import AppIcon from "@/components/AppIcon.vue";
 const store = useNotesStore();
 const keyword = ref("");
 
-/** 已掌握标签：按掌握时间降序 */
-const filteredTags = computed(() =>
-  store.masteredTags
-    .filter((t) => t.name.includes(keyword.value))
-    .sort((a, b) => (b.masteredAt || 0) - (a.masteredAt || 0))
-);
+/** 休息中且未到期的标签：按回来时间升序 */
+const filteredTags = computed(() => {
+  const now = Date.now();
+  return store.tags
+    .filter(
+      (t) =>
+        t.status === "snoozed" &&
+        (t.snoozeExpireAt || 0) > now &&
+        t.name.includes(keyword.value)
+    )
+    .sort((a, b) => (a.snoozeExpireAt || 0) - (b.snoozeExpireAt || 0));
+});
 
 function noteCount(name: string): number {
   return store.notes.filter((n) => n.tags.includes(name) && !n.isDeleted).length;
 }
 
-/**
- * 放回我的词：解除门槛高于进入门槛（开发文档 3.3）
- * 长按 + 二次确认，避免误触破坏「永久已掌握」语义
- */
+/** 提前放回：长按 + 二次确认，与已掌握词库同一手感 */
 function confirmRestore(name: string) {
   uni.showModal({
-    title: "放回我的词",
-    content: `# ${name} 将放回「我的词」，重新出现在书架上，确定吗？`,
+    title: "提前放回",
+    content: `# ${name} 将提前结束休息，回到「我的词」，确定吗？`,
     confirmText: "放回去",
     success: ({ confirm }) => {
       if (confirm) {
@@ -88,32 +91,30 @@ function confirmRestore(name: string) {
   });
 }
 
-/**
- * 查看词典 → 自动移出已掌握词库（开发文档 3.2.1 / 3.3.2）：
- * 还来查词典，说明这位老朋友还没真的读完
- */
-function viewDict(name: string) {
-  uni.showModal({
-    title: "查看词典",
-    content: `查看 #${name} 的词典会把它移出已掌握词库，放回「我的词」，继续吗？`,
-    confirmText: "查看",
-    cancelText: "再想想",
-    success: ({ confirm }) => {
-      if (confirm) {
-        store.setTagStatus(name, "learning");
-        uni.navigateTo({
-          url: `/pages/tag-detail/tag-detail?name=${encodeURIComponent(name)}`,
-        });
-      }
-    },
+/** 点击查看相遇记录（看不动状态，记一笔才会回来） */
+function viewDetail(name: string) {
+  uni.navigateTo({
+    url: `/pages/tag-detail/tag-detail?name=${encodeURIComponent(name)}`,
   });
 }
 
-function formatTime(ts?: number): string {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+/** 回来时间的轻声表达：今天 / 明天 / M-D */
+function backText(expireAt?: number): string {
+  if (!expireAt) return "—";
+  const d = new Date(expireAt);
+  const today = new Date();
+  const isToday =
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate();
+  if (isToday) return "今天就回来";
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const isTomorrow =
+    d.getFullYear() === tomorrow.getFullYear() &&
+    d.getMonth() === tomorrow.getMonth() &&
+    d.getDate() === tomorrow.getDate();
+  if (isTomorrow) return "明天回来";
+  return `${d.getMonth() + 1}-${d.getDate()} 回来`;
 }
 </script>
 
@@ -165,11 +166,10 @@ function formatTime(ts?: number): string {
   color: var(--color-text-placeholder);
 }
 
-.mastered-list {
+.snoozed-list {
   margin-top: var(--space-sm);
 }
 
-/* 文档 3.3.3 提示语 */
 .quote-tip {
   margin-top: var(--space-md);
   display: flex;
@@ -181,7 +181,7 @@ function formatTime(ts?: number): string {
   text-align: center;
 }
 
-.mastered-card {
+.snoozed-card {
   display: flex;
   align-items: center;
   gap: var(--space-md);
@@ -194,7 +194,7 @@ function formatTime(ts?: number): string {
 }
 
 /* 按压态：轻米色反馈 */
-.mastered-card:active {
+.snoozed-card:active {
   background-color: var(--color-bg-input);
 }
 
@@ -222,15 +222,13 @@ function formatTime(ts?: number): string {
   color: var(--color-text-placeholder);
 }
 
-/* 绿色对勾徽章：与状态灯 dot-green 语义一致 */
-.check-badge {
+/* 月亮徽章：休息中的安静标记 */
+.moon-badge {
   width: 24px;
   height: 24px;
   border-radius: var(--radius-full);
-  background-color: var(--color-green);
-  color: var(--color-text-inverse);
+  background-color: var(--color-bg-secondary);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
   text-align: center;
   line-height: 24px;
   flex-shrink: 0;

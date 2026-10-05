@@ -2,6 +2,7 @@
 import { onLaunch } from "@dcloudio/uni-app";
 import { useNotesStore } from "@/store/notes";
 import { useUserStore } from "@/store/user";
+import { syncReviewLog } from "@/utils/review-log";
 
 // 自定义隐私授权弹窗：注册后微信不再弹「原生隐私弹窗」
 // （开发者工具原生弹窗有渲染卡死 bug，自定义普通 modal 规避之，真机行为一致）
@@ -22,6 +23,8 @@ onLaunch(async () => {
   // 先静默登录（token 自动随云对象调用上传），再拉取数据；登录失败仍以本地模式运行
   await useUserStore().ensureLogin();
   useNotesStore().loadAll();
+  // 近 7 天复习日志云端同步：拉取云端 → 合并 → 回写两端（失败静默降级本地）
+  syncReviewLog();
 });
 </script>
 

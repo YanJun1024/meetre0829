@@ -13,9 +13,32 @@ const db = uniCloud.database();
 const dbCmd = db.command;
 const notesCol = db.collection("notes");
 const tagsCol = db.collection("tags");
+const reviewLogsCol = db.collection("review_logs");
 
 const SNOOZE_DURATION = 7 * 24 * 60 * 60 * 1000; // 暂时不想看：7 天
 const REMASTER_INIT_SCORE = 1; // 退出已掌握后的初始排名分（开发文档 3.1.5）
+const REVIEW_KEEP_DAYS = 7; // 复习日志云端保留天数
+
+/** 复习日志：按天取 MAX 合并（防重复累加，支持跨设备），并裁至近 N 天 */
+function mergePruneReviewLog(existing = {}, incoming = {}, now = Date.now()) {
+  const keep = new Set();
+  for (let i = 0; i < REVIEW_KEEP_DAYS; i++) {
+    const d = new Date(now - i * 24 * 60 * 60 * 1000);
+    keep.add(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
+  }
+  const days = new Set([...Object.keys(existing), ...Object.keys(incoming)]);
+  const out = {};
+  for (const k of days) {
+    if (!keep.has(k)) continue;
+    const e = existing[k] || { dict: 0, review: 0 };
+    const i = incoming[k] || { dict: 0, review: 0 };
+    out[k] = {
+      dict: Math.max(Number(e.dict) || 0, Number(i.dict) || 0),
+      review: Math.max(Number(e.review) || 0, Number(i.review) || 0),
+    };
+  }
+  return out;
+}
 
 module.exports = {
   /** 校验 token 并挂到 this.userId，供各方法直接读取 */
@@ -271,92 +294,6 @@ module.exports = {
   },
 
   /**
-   * 一次性本地数据补传（换服务空间迁移用）：
-   * - 笔记按 userId+createTime+content 指纹去重，幂等可重复触发
-   * - 保留原始 createTime / 行为计数 / 附件引用
-   * - 标签按 userId+name upsert，携带熟悉度/释义/状态等完整元数据
-   * - 返回 idMap（旧本地id → 新云端_id），客户端据此重映射
-   */
-  async pushLocalData({ notes, tags }) {
-    const userId = this.userId;
-    const inputNotes = Array.isArray(notes) ? notes.slice(0, 1000) : [];
-    const inputTags = Array.isArray(tags) ? tags.slice(0, 500) : [];
-
-    const existRes = await notesCol.where({ userId }).limit(1000).get();
-    const fingerprint = new Set(
-      existRes.data.map((d) => `${d.createTime}|${d.content}`)
-    );
-    const idMap = {};
-    let notesPushed = 0;
-
-    for (const n of inputNotes) {
-      if (!n || typeof n.content !== "string") continue;
-      const fp = `${n.createTime}|${n.content}`;
-      if (fingerprint.has(fp)) continue;
-      const res = await notesCol.add({
-        userId,
-        content: n.content,
-        tags: Array.isArray(n.tags) ? n.tags : [],
-        scene: n.scene || "",
-        sceneType: n.sceneType || "other",
-        images: Array.isArray(n.images) ? n.images.slice(0, 9) : [],
-        audios: Array.isArray(n.audios)
-          ? n.audios
-              .filter((a) => a && typeof a.cloudPath === "string")
-              .slice(0, 9)
-              .map((a) => ({
-                cloudPath: String(a.cloudPath).slice(0, 500),
-                duration: Number(a.duration) || 0,
-              }))
-          : [],
-        dictLookups: Number(n.dictLookups) || 0,
-        noteReviews: Number(n.noteReviews) || 0,
-        createTime: Number(n.createTime) || Date.now(),
-        isDeleted: !!n.isDeleted,
-      });
-      fingerprint.add(fp);
-      if (n.id) idMap[n.id] = res.id;
-      notesPushed++;
-    }
-
-    let tagsPushed = 0;
-    for (const t of inputTags) {
-      if (!t || !t.name) continue;
-      const noteIds = (Array.isArray(t.notes) ? t.notes : [])
-        .map((id) => idMap[id] || id)
-        .filter((id) => typeof id === "string");
-      const doc = {
-        name: t.name,
-        status: ["learning", "mastered", "snoozed"].includes(t.status)
-          ? t.status
-          : "learning",
-        notes: noteIds,
-        noteCount: noteIds.length,
-        rankScore: Number(t.rankScore) || 0,
-        familiarity: t.familiarity || null,
-        userDefinition: t.userDefinition || null,
-        sysDefinition: t.sysDefinition || null,
-      };
-      if (t.masteredAt) doc.masteredAt = Number(t.masteredAt);
-      if (t.snoozeExpireAt) doc.snoozeExpireAt = Number(t.snoozeExpireAt);
-      if (t.lastReviewed) doc.lastReviewed = Number(t.lastReviewed);
-      if (t.familiaritySource) doc.familiaritySource = t.familiaritySource;
-      if (t.familiarityUpdatedAt)
-        doc.familiarityUpdatedAt = Number(t.familiarityUpdatedAt);
-
-      const exist = await tagsCol.where({ userId, name: t.name }).get();
-      if (exist.data.length) {
-        await tagsCol.doc(exist.data[0]._id).update(doc);
-      } else {
-        await tagsCol.add({ userId, ...doc });
-      }
-      tagsPushed++;
-    }
-
-    return { errCode: 0, notesPushed, tagsPushed, idMap };
-  },
-
-  /**
    * 系统释义兜底（开发文档 3.6.2 第二层，v1.5）
    * 英文词走 dictionaryapi.dev 免费词典 API，取回后缓存到标签；失败/中文返回 null 退回空状态
    */
@@ -396,5 +333,39 @@ module.exports = {
       // 兜底失败退回空状态，不报错
       return { errCode: 0, sysDefinition: null };
     }
+  },
+
+  // =============================================================
+  // 复习日志（近7天趋势图）云备份
+  // =============================================================
+
+  /** 拉取用户复习日志（已裁至近 7 天） */
+  async getReviewLog() {
+    const userId = this.userId;
+    const res = await reviewLogsCol.where({ userId }).limit(1).get();
+    const doc = res.data[0];
+    const log = mergePruneReviewLog(doc?.log || {}, {});
+    return { errCode: 0, log };
+  },
+
+  /**
+   * 推送本地日志并合并：
+   * - 按天按字段取 MAX（防重复推送导致重复计数；另一设备更高的值自然胜出）
+   * - 裁至近 7 天
+   * - 返回合并后的权威日志，供前端回写本地缓存
+   */
+  async pushReviewLog({ log }) {
+    const userId = this.userId;
+    const now = Date.now();
+    const existingRes = await reviewLogsCol.where({ userId }).limit(1).get();
+    const existing = existingRes.data[0];
+    const merged = mergePruneReviewLog(existing?.log || {}, log || {}, now);
+
+    if (existing) {
+      await reviewLogsCol.doc(existing._id).update({ log: merged, updatedAt: now });
+    } else {
+      await reviewLogsCol.add({ userId, log: merged, createdAt: now, updatedAt: now });
+    }
+    return { errCode: 0, log: merged };
   },
 };

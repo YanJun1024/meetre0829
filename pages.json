@@ -1,15 +1,15 @@
 {
   "pages": [
     {
-      "path": "pages/review/review",
+      "path": "pages/record/record",
       "style": {
-        "navigationBarTitleText": "复习"
+        "navigationBarTitleText": "记一笔"
       }
     },
     {
-      "path": "pages/record/record",
+      "path": "pages/review/review",
       "style": {
-        "navigationBarTitleText": "记录"
+        "navigationBarTitleText": "我的词"
       }
     },
     {
@@ -25,9 +25,15 @@
       }
     },
     {
+      "path": "pages/snoozed/snoozed",
+      "style": {
+        "navigationBarTitleText": "休息中的词"
+      }
+    },
+    {
       "path": "pages/tag-detail/tag-detail",
       "style": {
-        "navigationBarTitleText": "标签详情"
+        "navigationBarTitleText": "相遇记录"
       }
     }
   ],
@@ -38,16 +44,16 @@
     "borderStyle": "@tabBorderStyle",
     "list": [
       {
-        "pagePath": "pages/review/review",
-        "text": "复习",
-        "iconPath": "@iconReview",
-        "selectedIconPath": "@iconReviewActive"
-      },
-      {
         "pagePath": "pages/record/record",
-        "text": "记录",
+        "text": "记一笔",
         "iconPath": "@iconRecord",
         "selectedIconPath": "@iconRecordActive"
+      },
+      {
+        "pagePath": "pages/review/review",
+        "text": "我的词",
+        "iconPath": "@iconReview",
+        "selectedIconPath": "@iconReviewActive"
       },
       {
         "pagePath": "pages/profile/profile",

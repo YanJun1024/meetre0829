@@ -18,7 +18,8 @@
       </view>
     </view>
 
-    <!-- 录音：播放条（播放时经 getTempFileURL 换临时链接，带缓存） -->
+    <!-- 录音：播放条（播放时经 getTempFileURL 换临时链接，带缓存）
+         播放中显示：进度条 + 已播放时间 / 总时长 + 剩余时间（倒计时） -->
     <view
       v-for="(a, i) in audios"
       :key="a.cloudPath"
@@ -26,10 +27,27 @@
       @click="togglePlay(a.cloudPath)"
     >
       <text class="att-audio-icon">{{ playingPath === a.cloudPath ? "⏸" : "▶" }}</text>
-      <text class="att-audio-text">录音 {{ fmt(a.duration) }}</text>
+      <view class="att-audio-body">
+        <view class="att-audio-label-row">
+          <text class="att-audio-text">
+            {{ playingPath === a.cloudPath ? "播放中" : "录音" }}
+            {{ fmt(currentPlayTime) }} / {{ fmt(a.duration) }}
+          </text>
+          <text
+            v-if="playingPath === a.cloudPath"
+            class="att-audio-countdown"
+          >-{{ fmt(Math.max(0, (a.duration || 0) - currentPlayTime)) }}</text>
+        </view>
+        <view class="att-audio-bar">
+          <view
+            class="att-audio-bar-fill"
+            :style="barStyle(a.cloudPath, a.duration)"
+          />
+        </view>
+      </view>
       <text
         v-if="editable"
-        class="att-remove"
+        class="att-remove audio-remove"
         @click.stop="removeAudio(i)"
       >✕</text>
     </view>
@@ -116,23 +134,46 @@ function fmt(seconds: number): string {
 // =============================================================
 
 const playingPath = ref("");
+const currentPlayTime = ref(0); // 正在播放的音频当前进度（秒）
 let audioCtx: UniApp.InnerAudioContext | null = null;
+
+/** 进度条样式（只有当前播放的那条填充，其他条宽 0） */
+function barStyle(cloudPath: string, duration: number): Record<string, string> {
+  if (playingPath.value !== cloudPath) return { width: "0%" };
+  const total = duration || 0;
+  const ratio = total > 0 ? Math.min(1, currentPlayTime.value / total) : 0;
+  return { width: `${ratio * 100}%` };
+}
 
 function togglePlay(cloudPath: string) {
   if (playingPath.value === cloudPath) {
     audioCtx?.stop();
     playingPath.value = "";
+    currentPlayTime.value = 0;
     return;
   }
   audioCtx?.stop();
+  playingPath.value = "";
+  currentPlayTime.value = 0;
   resolveUrl(cloudPath)
     .then((src) => {
       if (!audioCtx) {
         audioCtx = uni.createInnerAudioContext();
-        audioCtx.onEnded(() => (playingPath.value = ""));
-        audioCtx.onError(() => (playingPath.value = ""));
+        audioCtx.onTimeUpdate(() => {
+          // InnerAudioContext 里的 currentTime / duration 是秒，按秒粒度更新就够
+          currentPlayTime.value = audioCtx?.currentTime || 0;
+        });
+        audioCtx.onEnded(() => {
+          playingPath.value = "";
+          currentPlayTime.value = 0;
+        });
+        audioCtx.onError(() => {
+          playingPath.value = "";
+          currentPlayTime.value = 0;
+        });
       }
       audioCtx.src = src;
+      currentPlayTime.value = 0;
       audioCtx.play();
       playingPath.value = cloudPath;
     })
@@ -143,6 +184,7 @@ function removeAudio(index: number) {
   if (playingPath.value === props.audios[index]?.cloudPath) {
     audioCtx?.stop();
     playingPath.value = "";
+    currentPlayTime.value = 0;
   }
   props.audios.splice(index, 1);
 }
@@ -174,7 +216,7 @@ onUnmounted(() => {
 .att-img {
   width: 120rpx;
   height: 120rpx;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm); /* 图片缩略图 8px */
   background-color: var(--color-bg-input);
 }
 
@@ -193,22 +235,70 @@ onUnmounted(() => {
 }
 
 .att-audio {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   background-color: var(--color-bg-input);
-  border-radius: var(--radius-full);
-  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
   align-self: flex-start;
+  min-width: 240px;
 }
 
 .att-audio-icon {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   color: var(--color-primary-dark);
+  flex-shrink: 0;
+}
+
+.att-audio-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.att-audio-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
 }
 
 .att-audio-text {
   font-size: var(--font-size-sm);
   color: var(--color-text-body);
+}
+
+.att-audio-countdown {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* 进度条容器：100% 宽，米色；填充：赭石色，左对齐 */
+.att-audio-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-border-light);
+  overflow: hidden;
+}
+.att-audio-bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: var(--radius-full);
+  background-color: var(--color-primary);
+  transition: width 0.2s linear;
+}
+
+/* 录音条内的删除按钮：相对定位贴右上，避免干扰条体点击 */
+.audio-remove {
+  top: -6px;
+  right: -6px;
 }
 </style>

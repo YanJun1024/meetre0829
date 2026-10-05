@@ -1,77 +1,93 @@
 /* ============================================================
    MeetRe 设计令牌（Design Tokens）
-   最终定版 · 基于分层染色架构
+   v1.5「纸墨感」定版 · 暖纸 / 墨色 / 暗金印章
+   设计六原则：暖 · 静 · 细 · 空 · 真 · 退
    说明：小程序不支持 :root，统一挂载在 page 选择器上
    ============================================================ */
 
 page {
-  /* ========== 品牌色 ========== */
-  --color-primary: #C4744A;        /* 赭石 - 主品牌色 */
-  --color-primary-dark: #A85F3A;   /* 按压/深色状态 */
-  --color-primary-light: #D49A7A;  /* 浅色/辅助 */
-  --color-primary-bg: #F5EDE4;     /* 品牌色背景 */
+  /* ========== 主色：暗金 / 赭石（像墨水或印章） ========== */
+  --color-primary: #B8860B;        /* 暗金色 - 主色 */
+  --color-primary-dark: #9A7209;   /* 按下态 */
+  --color-primary-light: #D4A93E;  /* 提亮（禁用/暗色辅助） */
+  --color-primary-bg: #F5EDD8;     /* 主色淡底 - 标签、浅底 */
 
-  /* ========== 状态色 ========== */
-  --color-red: #D9605A;      /* 需复习 - 柔和红 */
-  --color-red-bg: #F8ECEA;
-  --color-yellow: #D4A44A;   /* 复习中 - 暖金 */
-  --color-yellow-bg: #F8F0E0;
-  --color-green: #5A8A6A;    /* 已掌握 - 柔和绿 */
-  --color-green-bg: #E8F0EA;
+  /* ========== 辅助色：暖灰蓝（旧钢笔水，词典/冷静） ========== */
+  --color-secondary: #5C6B7A;
+  --color-secondary-bg: #ECEFF2;
 
-  /* ========== 滑动动作色（并入品牌色系：词典-柔和绿 / 笔记-品牌赭石） ========== */
-  --color-swipe-left: #5A8A6A;   /* 左滑-词典（柔和绿，与已掌握色同族） */
-  --color-swipe-right: #C4744A;  /* 右滑-笔记（品牌赭石） */
+  /* ========== 状态色（天然颜料感，压低饱和，不抢视线） ========== */
+  --color-red: #B06A54;      /* 提醒 / 录音中 - 陶土红 */
+  --color-red-bg: #F3E6DF;
+  --color-yellow: #B08B4C;   /* 来往中 - 暗哑赭黄 */
+  --color-yellow-bg: #F4ECDB;
+  --color-yellow-dark: #7A6420; /* 提示文字（浅底） */
+  --color-green: #7A8F6F;    /* 已读完 - 鼠尾草绿 */
+  --color-green-bg: #E9EEE2;
 
-  /* ========== 背景色（分层染色） ========== */
-  --color-bg-system: #FFFFFF;    /* 系统框架层 */
-  --color-bg-page: #F7F4EB;      /* 内容层 - 暖米色 */
-  --color-bg-card: #FFFFFF;      /* 操作交互层 */
-  --color-bg-secondary: #F0EBE2; /* 分割/次要区域 */
-  --color-bg-input: #F5F2EB;     /* 输入框内部 */
+  /* ========== 滑动动作色（右滑相遇史-暗金情感 / 左滑词典-灰蓝工具） ========== */
+  --color-swipe-left: #5C6B7A;   /* 左滑 - 词典（暖灰蓝） */
+  --color-swipe-right: #B8860B;  /* 右滑 - 相遇史（暗金） */
 
-  /* ========== 边框 ========== */
-  --color-border: #E4DDD4;
-  --color-border-light: #EDE8E0;
+  /* ========== 背景层（晒过的纸 + 便签纸，无纯白） ========== */
+  --color-bg-system: #F5EEE2;    /* 系统框架层 = 纸色，上下过度无痕 */
+  --color-bg-page: #F5EEE2;      /* 页面主背景 - 暖米色 */
+  --color-bg-card: #FFFEFA;      /* 卡片 - 偏一点黄的白，便签纸 */
+  --color-bg-secondary: #F0E8D8; /* 浅背景 - 标签/输入底 */
+  --color-bg-input: #F0E8D8;     /* 输入框内部 */
 
-  /* ========== 文字色（暖色调，与米色背景协调） ========== */
-  --color-text-primary: #2C2823;     /* 主标题 - 暖近黑 */
-  --color-text-body: #4A4239;        /* 正文 - 暖灰褐 */
-  --color-text-secondary: #6B655E;   /* 辅助文字 */
-  --color-text-placeholder: #948C82; /* 占位符（对比度提升） */
-  --color-text-inverse: #FFFFFF;     /* 反色文字 */
+  /* ========== 分割线（纸的折痕，若有若无） ========== */
+  --color-border: #E8E0D2;
+  --color-border-light: #EFE8DA;
 
-  /* ========== 阴影（暖色调，米色底上可见） ========== */
-  --shadow-card: 0 4px 16px rgba(87, 62, 38, 0.10);
-  --shadow-card-hover: 0 6px 22px rgba(87, 62, 38, 0.16);
-  --shadow-float: 0 4px 16px rgba(196, 116, 74, 0.30);
-  --shadow-tab: 0 -2px 10px rgba(87, 62, 38, 0.08);
+  /* ========== 文字：墨色（暖，不用纯黑） ========== */
+  --color-text-primary: #2C2416;     /* 暖墨色 - 标题/正文 */
+  --color-text-body: #2C2416;        /* 正文 - 钢笔墨水 */
+  --color-text-secondary: #7A6F5E;   /* 次要文字 - 淡墨 */
+  --color-text-placeholder: #A89E8E; /* 辅助/时间 - 更淡的暖灰 */
+  --color-text-inverse: #FFFEF5;     /* 印章上的暖白，不用纯白 */
 
-  /* ========== 圆角 ========== */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  /* ========== 阴影（暖棕淡影，像纸叠在纸上 / 印章按下去的痕迹） ========== */
+  --shadow-card: 0 2px 12px rgba(184, 134, 11, 0.08);
+  --shadow-card-hover: 0 4px 18px rgba(184, 134, 11, 0.12);
+  --shadow-float: 0 3px 10px rgba(184, 134, 11, 0.2);
+  --shadow-tab: 0 -2px 10px rgba(184, 134, 11, 0.06);
+
+  /* 面板投影（大遮罩层不用暖棕，用中性黑，避免暖底发脏） */
+  --shadow-drawer: 0 0 32px rgba(0, 0, 0, 0.15);       /* 侧滑抽屉 */
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, 0.12);     /* 底部弹层 */
+
+  /* 按钮按下态：印章收回的浅痕 */
+  --shadow-button-active: 0 2px 6px rgba(184, 134, 11, 0.18);
+
+  /* 聚焦光晕环（状态点/选中态，轻到不抢视线） */
+  --shadow-focus: 0 0 0 3px rgba(184, 134, 11, 0.15);
+
+  /* ========== 圆角（卡片12 / 按钮20 / 标签10 / 输入8） ========== */
+  --radius-sm: 8px;      /* 输入框、图片缩略图 */
+  --radius-md: 10px;     /* 标签、徽章 */
+  --radius-lg: 12px;     /* 卡片：像圆角便签纸 */
+  --radius-xl: 20px;     /* 按钮：胶囊形 */
   --radius-full: 9999px;
 
-  /* ========== 间距（整体放宽一档） ========== */
+  /* ========== 间距（8px 栅格，留白宁宽勿挤） ========== */
   --space-xs: 4px;
   --space-sm: 8px;
-  --space-md: 14px;
-  --space-lg: 20px;
+  --space-md: 16px;
+  --space-lg: 20px;      /* 页面左右边距 */
   --space-xl: 24px;
   --space-2xl: 32px;
   --space-3xl: 48px;
 
-  /* ========== 字体 ========== */
-  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-size-xs: 12px;
-  --font-size-sm: 14px;
-  --font-size-base: 15px;
-  --font-size-md: 17px;
-  --font-size-lg: 20px;
-  --font-size-xl: 24px;
-  --font-size-2xl: 32px;
+  /* ========== 字体（系统默认，行高正文1.6/标题1.3） ========== */
+  --font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Source Han Sans SC', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 12px;    /* 时间 / 标签 / 辅助 */
+  --font-size-sm: 13px;    /* 次要说明 */
+  --font-size-base: 14px;  /* 正文 / 笔记 */
+  --font-size-md: 15px;    /* 卡片标题 */
+  --font-size-lg: 16px;    /* 列表单词 */
+  --font-size-xl: 22px;    /* 页面大标题（问候语） */
+  --font-size-2xl: 24px;   /* 输入时的单词 */
 
   --font-weight-regular: 400;
   --font-weight-medium: 500;
@@ -81,52 +97,64 @@ page {
 
 /* ============================================================
    深色模式（跟随系统）
-   暖黑调：与品牌暖色同族，避免冷灰死黑
+   暖黑纸调：夜色里的旧笔记本，金色印章在灯下微亮
    ============================================================ */
 @media (prefers-color-scheme: dark) {
   page {
-    /* 品牌色（主色不变，背景改深色调） */
-    --color-primary-bg: #3A2D22;
+    /* 主色（暗底上提亮一档） */
+    --color-primary: #D2A93C;
+    --color-primary-dark: #B8932B;
+    --color-primary-bg: #3A331F;
 
-    /* 状态色（提亮一档保证暗底可读，底色改深色同族） */
-    --color-red: #E0837C;
-    --color-red-bg: #3D2B28;
-    --color-yellow: #E0B465;
-    --color-yellow-bg: #3B3222;
-    --color-green: #7DAA8C;
-    --color-green-bg: #26332B;
+    /* 辅助色 */
+    --color-secondary: #8FA0B1;
+    --color-secondary-bg: #2C323A;
+
+    /* 状态色（提亮保证暗底可读，底色换深色同族） */
+    --color-red: #CE8974;
+    --color-red-bg: #43302A;
+    --color-yellow: #D4B878;
+    --color-yellow-bg: #3D3524;
+    --color-yellow-dark: #E0C078;
+    --color-green: #97AE8B;
+    --color-green-bg: #2B362B;
 
     /* 滑动动作色 */
-    --color-swipe-left: #7DAA8C;
-    --color-swipe-right: #C4744A;
+    --color-swipe-left: #8FA0B1;
+    --color-swipe-right: #D2A93C;
 
     /* 背景色（暖黑分层） */
-    --color-bg-system: #1C1917;
-    --color-bg-page: #201C18;
-    --color-bg-card: #2A2520;
-    --color-bg-secondary: #35302A;
-    --color-bg-input: #2E2924;
+    --color-bg-system: #1E1A14;
+    --color-bg-page: #1E1A14;
+    --color-bg-card: #29241C;
+    --color-bg-secondary: #332D23;
+    --color-bg-input: #332D23;
 
-    /* 边框 */
-    --color-border: #3E372F;
-    --color-border-light: #332D26;
+    /* 折痕 */
+    --color-border: #3D362B;
+    --color-border-light: #332D24;
 
-    /* 文字色（暖白系，层级与浅色对调） */
-    --color-text-primary: #EFEAE2;
-    --color-text-body: #C9C2B8;
-    --color-text-secondary: #948C82;
-    --color-text-placeholder: #6B655E;
-    --color-text-inverse: #FFFFFF;
+    /* 墨色（暖白系，层级对调） */
+    --color-text-primary: #EFE7D6;
+    --color-text-body: #CCC2B0;
+    --color-text-secondary: #948A78;
+    --color-text-placeholder: #6E6557;
+    --color-text-inverse: #FFFBEF;
 
-    /* 阴影（深底改用黑色阴影，强度提高） */
-    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
-    --shadow-card-hover: 0 6px 22px rgba(0, 0, 0, 0.50);
-    --shadow-float: 0 4px 16px rgba(196, 116, 74, 0.25);
-    --shadow-tab: 0 -2px 10px rgba(0, 0, 0, 0.40);
+    /* 阴影（深底改用黑色阴影） */
+    --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.35);
+    --shadow-card-hover: 0 4px 18px rgba(0, 0, 0, 0.5);
+    --shadow-float: 0 3px 10px rgba(210, 169, 60, 0.25);
+    --shadow-tab: 0 -2px 10px rgba(0, 0, 0, 0.4);
+
+    --shadow-drawer: 0 0 32px rgba(0, 0, 0, 0.5);
+    --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, 0.4);
+    --shadow-button-active: 0 2px 6px rgba(210, 169, 60, 0.25);
+    --shadow-focus: 0 0 0 3px rgba(210, 169, 60, 0.2);
   }
 
   /* AppIcon 为 data-uri 渲染，颜色固定不可变；
-     暗色下整体微提亮 + 轻降饱和，让灰/深赭石图标在暗底可读，
+     暗色下整体微提亮 + 轻降饱和，让灰/暗金图标在暗底可读，
      白色与亮色图标几乎不受影响 */
   .app-icon {
     filter: brightness(1.4) saturate(0.85);

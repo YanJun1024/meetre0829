@@ -12,29 +12,29 @@
  * 如果你的项目同样使用了scss预处理，你也可以直接在你的 scss 代码中使用如下变量，同时无需 import 这个文件
  */
 
-/* 颜色变量（已同步 MeetRe 设计令牌，见 styles/tokens.css 与开发文档 6.4） */
+/* 颜色变量（已同步 MeetRe v1.5「纸墨感」设计令牌，见 styles/tokens.css） */
 
 /* 行为相关颜色 */
-$uni-color-primary: #C4744A; // 赭石 - MeetRe 主品牌色
-$uni-color-success: #5A8A6A; // 已掌握 - 柔和绿
-$uni-color-warning: #D4A44A; // 复习中 - 暖金
-$uni-color-error: #D9605A;   // 需复习 - 柔红
+$uni-color-primary: #B8860B; // 暗金/赭石 - 印章主色
+$uni-color-success: #7A8F6F; // 已读完 - 鼠尾草绿
+$uni-color-warning: #B08B4C; // 来往中 - 暗哑赭黄
+$uni-color-error: #B06A54;   // 提醒 - 陶土红
 
-/* 文字基本颜色（与 styles/tokens.css 同步，暖色调） */
-$uni-text-color: #4A4239; // 正文（MeetRe text-body）
-$uni-text-color-inverse: #fff; // 反色
-$uni-text-color-grey: #6B655E; // 辅助文字（WCAG AA 达标）
-$uni-text-color-placeholder: #948C82;
-$uni-text-color-disable: #c0c0c0;
+/* 文字基本颜色（与 styles/tokens.css 同步，暖墨色调） */
+$uni-text-color: #2C2416; // 正文（钢笔墨水）
+$uni-text-color-inverse: #FFFEF5; // 印章上的暖白
+$uni-text-color-grey: #7A6F5E; // 次要文字（淡墨）
+$uni-text-color-placeholder: #A89E8E;
+$uni-text-color-disable: #c0b8a8;
 
 /* 背景颜色 */
-$uni-bg-color: #fff;
-$uni-bg-color-grey: #F7F4EB; // 暖米色内容层
-$uni-bg-color-hover: #F5EDE4; // 品牌色背景
+$uni-bg-color: #FFFEFA; // 便签纸
+$uni-bg-color-grey: #F5EEE2; // 暖米纸
+$uni-bg-color-hover: #F5EDD8; // 主色淡底
 $uni-bg-color-mask: rgba(0, 0, 0, 0.4); // 遮罩颜色
 
 /* 边框颜色 */
-$uni-border-color: #E4DDD4;
+$uni-border-color: #E8E0D2;
 
 /* 尺寸变量 */
 
