@@ -113,6 +113,20 @@
         </view>
       </view>
 
+      <!-- 保存后反馈（v1.5 3.2.2）：底部轻反馈条，2.5s 自动消失 -->
+      <view v-if="famFeedbackTag" class="fam-bar">
+        <view class="fam-head">
+          <AppIcon name="check" :size="14" color="#9A7209" />
+          <text class="fam-title">已保存 #{{ famFeedbackTag }}</text>
+        </view>
+        <text class="fam-question">这个词你现在能说出来吗？</text>
+        <view class="fam-options">
+          <view class="fam-opt" @click="answerFamiliarity('familiar')">😎 能</view>
+          <view class="fam-opt" @click="answerFamiliarity('fuzzy')">😅 有点悬</view>
+          <view class="fam-opt" @click="answerFamiliarity('unfamiliar')">🤔 不能</view>
+        </view>
+      </view>
+
       <!-- 今天的相遇：今天写的便签 -->
       <view v-if="todayNotes.length" class="today-section">
         <text class="section-label">今天的相遇</text>
@@ -173,6 +187,7 @@ import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { parseTags, useNotesStore } from "@/store/notes";
 import { useUserStore } from "@/store/user";
+import type { Familiarity } from "@/types";
 import { compressImage } from "@/utils/media";
 import AttachmentList from "@/components/AttachmentList.vue";
 import AppIcon from "@/components/AppIcon.vue";
@@ -309,6 +324,63 @@ function goOldFriend() {
 function dismissOldFriend() {
   homeVisitMuted.value = true;
   uni.setStorageSync(HOME_VISIT_KEY, dayKey(Date.now()));
+}
+
+// =============================================================
+// 保存后反馈（v1.5 3.2.2）：当天第1-2次记录才弹，已有标记不弹
+// 底部轻反馈条，2.5s 自动消失；连续3次未点击 → 冷却3天
+// =============================================================
+
+const FAM_ASKED_KEY = "meetre_fam_asked_date";
+const FAM_SKIP_KEY = "meetre_fam_skip_count";
+
+const famFeedbackTag = ref("");
+let famTimer: ReturnType<typeof setTimeout> | null = null;
+
+function shouldAskFamiliarity(tagName: string): boolean {
+  const tag = store.tags.find((t) => t.name === tagName);
+  if (!tag || tag.familiarity) return false;
+
+  const today = dayKey(Date.now());
+  if (uni.getStorageSync(FAM_ASKED_KEY) === today) return false;
+
+  // 当天第3次+不弹（todayNotes 在 save 后已更新）
+  if (todayNotes.value.length > 2) return false;
+
+  const skip = uni.getStorageSync(FAM_SKIP_KEY) || { count: 0, until: 0 };
+  if (skip.count >= 3 && Date.now() < skip.until) return false;
+
+  return true;
+}
+
+function showFamiliarityBar(tagName: string) {
+  famFeedbackTag.value = tagName;
+  uni.setStorageSync(FAM_ASKED_KEY, dayKey(Date.now()));
+  if (famTimer) clearTimeout(famTimer);
+  famTimer = setTimeout(() => dismissFamiliarityBar(true), 2500);
+}
+
+function answerFamiliarity(f: Familiarity) {
+  store.setFamiliarity(famFeedbackTag.value, f);
+  uni.removeStorageSync(FAM_SKIP_KEY); // 有点击 → 重置跳过计数
+  dismissFamiliarityBar(false);
+}
+
+function dismissFamiliarityBar(skipped: boolean) {
+  if (famTimer) {
+    clearTimeout(famTimer);
+    famTimer = null;
+  }
+  famFeedbackTag.value = "";
+  if (skipped) {
+    // 未点击自动消失 → 累计跳过，满3次冷却3天
+    const skip = uni.getStorageSync(FAM_SKIP_KEY) || { count: 0, until: 0 };
+    skip.count += 1;
+    if (skip.count >= 3) {
+      skip.until = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    }
+    uni.setStorageSync(FAM_SKIP_KEY, skip);
+  }
 }
 
 // =============================================================
@@ -630,6 +702,16 @@ function save() {
     store.setTagStatus(tags[0], "learning");
     uni.showToast({ title: "这位老朋友又回来啦", icon: "none", duration: 2000 });
     return;
+  }
+
+  // 系统释义兜底（v1.5）：新 tag 无释义时后台静默拉取
+  if (tag && !tag.userDefinition?.text && !tag.sysDefinition) {
+    store.fetchSysDefinition(tags[0]); // 不 await，静默后台
+  }
+
+  // 保存后反馈（v1.5）：第1-2次记录且未标记过熟悉度；与 autoDefHint 互斥（同屏只留一个轻提示）
+  if (!saved && shouldAskFamiliarity(tags[0])) {
+    showFamiliarityBar(tags[0]);
   }
 
   uni.showToast({ title: `已保存 #${tags[0]}` });
@@ -970,6 +1052,55 @@ function save() {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-primary-dark);
+}
+
+/* 保存后反馈条（v1.5 3.2.2）：文档流内轻条，淡金底，三选项横排 */
+.fam-bar {
+  margin-top: var(--space-md);
+  background-color: var(--color-primary-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.fam-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fam-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-dark);
+}
+
+.fam-question {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-body);
+}
+
+.fam-options {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.fam-opt {
+  flex: 1;
+  text-align: center;
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-body);
+}
+
+/* 按压态：淡金反馈 */
+.fam-opt:active {
+  background-color: var(--color-bg-input);
 }
 
 /* 今天的相遇：今天写的便签小卡片 */
