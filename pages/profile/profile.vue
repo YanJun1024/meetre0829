@@ -66,7 +66,7 @@
             <text class="top-rank" :class="`top-rank-${i + 1}`">{{ i + 1 }}</text>
             <view class="top-info">
               <text class="top-name">#{{ t.name }}</text>
-              <text class="top-meta">相遇 {{ t.noteCount }} 次 · {{ levelText(t) }}</text>
+              <text class="top-meta">相遇 {{ t.noteCount }} 次</text>
             </view>
             <view class="top-btn" @click="goReview(t.name)">看看</view>
           </view>
@@ -272,15 +272,6 @@ function trendLabel(i: number): string {
 
 const topNeed = computed(() => store.rankedTags.slice(0, 3));
 
-function levelText(t: { statusLevel?: string }): string {
-  const map: Record<string, string> = {
-    red: "该看看了",
-    yellow: "常来看看",
-    green: "挺熟啦",
-  };
-  return map[t.statusLevel || "yellow"];
-}
-
 function goReview(name: string) {
   uni.setStorageSync("meetre_go_review_tag", name);
   uni.switchTab({ url: "/pages/review/review" });
@@ -351,7 +342,7 @@ function showTimeline() {
 
 <style scoped>
 .page {
-  height: 100vh;
+  min-height: 100vh;
   background-color: var(--color-bg-system);
 }
 
@@ -416,7 +407,7 @@ function showTimeline() {
 }
 
 .login-arrow {
-  font-size: 22px;
+  font-size: var(--font-size-xl);
   line-height: 1;
   color: var(--color-primary);
   margin-left: 2px;
@@ -622,17 +613,17 @@ function showTimeline() {
 
 .top-rank-1 {
   background-color: var(--color-red-bg);
-  color: var(--color-red);
+  color: var(--color-text-primary);
 }
 
 .top-rank-2 {
   background-color: var(--color-yellow-bg);
-  color: var(--color-yellow);
+  color: var(--color-text-primary);
 }
 
 .top-rank-3 {
   background-color: var(--color-green-bg);
-  color: var(--color-green);
+  color: var(--color-text-primary);
 }
 
 .top-info {

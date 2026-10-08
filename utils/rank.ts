@@ -1,7 +1,7 @@
-import type { Familiarity, Note, RankedTag, Tag } from "@/types";
+import type { Note, RankedTag, Tag, TagSortMode } from "@/types";
 
 // =============================================================
-// MeetRe 排名计算核心逻辑（v1.5 极简版）
+// MeetRe 排名计算核心逻辑（v1.6 极简版）
 // 排序规则就一条：笔记数量降序，次数相同按最近相遇时间降序。
 // 没有行为加权、没有时间衰减、没有熟悉度算法——排名是镜子，不是工具。
 // =============================================================
@@ -13,6 +13,8 @@ export interface TagScoreResult {
   noteCount: number;
   /** 最近相遇时间（最后一笔笔记的时间，无笔记为 0） */
   lastTime: number;
+  /** 初遇时间（最早一笔笔记的时间，无笔记为 0） */
+  firstTime: number;
 }
 
 export function calculateTagScore(tag: Tag, notes: Note[]): TagScoreResult {
@@ -21,11 +23,18 @@ export function calculateTagScore(tag: Tag, notes: Note[]): TagScoreResult {
   );
 
   const noteCount = tagNotes.length;
-  if (noteCount === 0) return { score: 0, noteCount: 0, lastTime: 0 };
+  if (noteCount === 0) {
+    return { score: 0, noteCount: 0, lastTime: 0, firstTime: 0 };
+  }
 
-  const lastTime = Math.max(...tagNotes.map((n) => n.createTime));
+  let lastTime = 0;
+  let firstTime = Number.MAX_SAFE_INTEGER;
+  for (const n of tagNotes) {
+    if (n.createTime > lastTime) lastTime = n.createTime;
+    if (n.createTime < firstTime) firstTime = n.createTime;
+  }
 
-  return { score: noteCount, noteCount, lastTime };
+  return { score: noteCount, noteCount, lastTime, firstTime };
 }
 
 export function computeRankedTags(
@@ -33,7 +42,7 @@ export function computeRankedTags(
   notes: Note[],
   now: number = Date.now()
 ): RankedTag[] {
-  // 休息到期后自动恢复参与排名（开发文档 3.4）：
+  // 休息到期后自动恢复参与排名（v1.6）：
   // 即使存储层 status 尚未写回 learning，显示层也按已恢复处理
   const activeTags = tags.filter(
     (t) =>
@@ -42,8 +51,11 @@ export function computeRankedTags(
   );
 
   const scored = activeTags.map((tag) => {
-    const { score, noteCount, lastTime } = calculateTagScore(tag, notes);
-    return { ...tag, score, noteCount, lastTime };
+    const { score, noteCount, lastTime, firstTime } = calculateTagScore(
+      tag,
+      notes
+    );
+    return { ...tag, score, noteCount, lastTime, firstTime };
   });
 
   // 笔记数量降序；次数相同按最近相遇时间降序
@@ -51,60 +63,65 @@ export function computeRankedTags(
     (a, b) => b.noteCount - a.noteCount || b.lastTime - a.lastTime
   );
 
-  return sorted.map((tag, index) => ({
-    ...tag,
-    rank: index + 1,
-    statusLevel: getStatusLevel(tag, now),
-  }));
-}
-
-/** 状态灯：只看相遇次数和最近有没有翻回去看，不做熟悉度判断 */
-export function getStatusLevel(
-  tag: { score: number; lastReviewed?: number },
-  now: number
-): "red" | "yellow" | "green" {
-  const threeDaysAgo = now - 3 * 24 * 60 * 60 * 1000;
-  const twoDaysAgo = now - 2 * 24 * 60 * 60 * 1000;
-
-  if (
-    tag.score >= 3 &&
-    (!tag.lastReviewed || tag.lastReviewed < threeDaysAgo)
-  ) {
-    return "red";
-  }
-  if (tag.lastReviewed && tag.lastReviewed >= twoDaysAgo) {
-    return "green";
-  }
-  return "yellow";
+  return sorted.map((tag, index) => ({ ...tag, rank: index + 1 }));
 }
 
 /**
- * 有效熟悉度（v2.0 熟悉度自动降级 · 惰性显示层）
- * 存储值不动，仅展示时计算：
- * - 手动标记（familiaritySource === 'user'）永不自动降，原样返回
- * - 行为推断的标记，超过 30 天无互动逐级降档：🟢→🟡、🟡→🔴（🔴 到底）
- * - 互动 = 记新笔记 / 查词典 / 回看 / 标记本身，任何互动重置 30 天计时
+ * 我的词排序（v1.6）：
+ * - count：相遇次数降序（默认），次数相同最近相遇优先
+ * - recent：最近相遇降序
+ * - first：初遇时间升序（最早认识的排前面）
  */
-export function effectiveFamiliarity(
-  tag: Tag,
+export function sortRankedTags(
+  list: RankedTag[],
+  mode: TagSortMode
+): RankedTag[] {
+  const copy = [...list];
+  if (mode === "recent") {
+    copy.sort((a, b) => b.lastTime - a.lastTime);
+  } else if (mode === "first") {
+    copy.sort((a, b) => a.firstTime - b.firstTime);
+  } else {
+    copy.sort(
+      (a, b) => b.noteCount - a.noteCount || b.lastTime - a.lastTime
+    );
+  }
+  return copy;
+}
+
+/** 本地日期键：YYYY-MM-DD */
+function dayKey(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * 老朋友提醒（v1.6）：
+ * - 只看活跃词，休息中 / 已掌握不参与
+ * - 相遇至少 2 次，且距最近一笔相遇超过 7 天
+ * - 候选不足 3 个 → 不显示
+ * - 每天确定性地换一个（用当天日期做种子，同一天内稳定，第二天自动换人）
+ */
+export function pickOldFriend(
+  tags: Tag[],
   notes: Note[],
   now: number = Date.now()
-): Familiarity | null {
-  const fam = tag.familiarity;
-  if (!fam || tag.familiaritySource === "user" || fam === "unfamiliar") {
-    return fam;
-  }
+): Tag | null {
+  const today = new Date(dayKey(now) + "T00:00:00").getTime();
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
 
-  const lastNoteTime = notes
-    .filter((n) => n.tags.includes(tag.name) && !n.isDeleted)
-    .reduce((max, n) => Math.max(max, n.createTime), 0);
-  const lastInteraction = Math.max(
-    lastNoteTime,
-    tag.lastReviewed || 0,
-    tag.familiarityUpdatedAt || 0
-  );
+  const candidates = tags.filter((t) => {
+    if (t.status !== "learning") return false;
+    const { noteCount, lastTime } = calculateTagScore(t, notes);
+    if (noteCount < 2 || !lastTime) return false;
+    return today - new Date(dayKey(lastTime) + "T00:00:00").getTime() > sevenDays;
+  });
 
-  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-  if (now - lastInteraction < thirtyDays) return fam;
-  return fam === "familiar" ? "fuzzy" : "unfamiliar";
+  if (candidates.length < 3) return null;
+
+  // 按名字排序保证候选集合顺序稳定，再用日期种子取一个
+  candidates.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const seed = Number(dayKey(now).replace(/-/g, ""));
+  return candidates[seed % candidates.length];
 }

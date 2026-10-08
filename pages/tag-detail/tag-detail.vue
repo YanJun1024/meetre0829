@@ -11,7 +11,7 @@
           </view>
         </view>
         <text class="head-meta">
-          你们已相遇 {{ notes.length }} 次 · 最近相遇 {{ formatTime(tag?.lastReviewed) }}
+          你们已经相遇 {{ notes.length }} 次 · 认识 {{ knownDays }} 天了
         </text>
       </view>
 
@@ -43,7 +43,7 @@
               :audios="note.audios || []"
             />
             <view class="note-meta">
-              <text class="note-time">{{ formatTime(note.createTime) }}</text>
+              <text class="note-time">{{ formatMeetTime(note.createTime) }}</text>
               <!-- 里程碑小星星：第 10/20/50 次相遇，悄悄出现 -->
               <text v-if="isMilestone(i)" class="note-star">✦ 第 {{ meetingNo(i) }} 次相遇</text>
               <!-- 最底部节点：初遇标记 -->
@@ -84,27 +84,41 @@ import { onLoad } from "@dcloudio/uni-app";
 import FloatAddButton from "@/components/FloatAddButton.vue";
 import AttachmentList from "@/components/AttachmentList.vue";
 import AppIcon from "@/components/AppIcon.vue";
-import { useNotesStore } from "@/store/notes";
+import { findTagCI, normalizeWord, useNotesStore } from "@/store/notes";
 import { resolveDefinition } from "@/utils/definition";
+import { formatMeetTime } from "@/utils/time";
 
 const store = useNotesStore();
 const tagName = ref("");
 
 onLoad((options: any) => {
-  tagName.value = decodeURIComponent(options?.name || "");
+  // v1.6：单词大小写归一（Apple = apple）
+  tagName.value = normalizeWord(decodeURIComponent(options?.name || ""));
   if (!tagName.value) return;
   // 打开详情 = 回看笔记，记录行为埋点；同时按需拉取系统释义兜底
   store.recordNoteReview(tagName.value);
   store.fetchSysDefinition(tagName.value);
 });
 
-const tag = computed(() => store.tags.find((t) => t.name === tagName.value));
+const tag = computed(() => findTagCI(store.tags, tagName.value));
 
 const notes = computed(() =>
   store.notes
     .filter((n) => n.tags.includes(tagName.value) && !n.isDeleted)
     .sort((a, b) => b.createTime - a.createTime)
 );
+
+/** 认识天数：从最早一笔笔记到今天，含首尾（v1.6，至少 1 天） */
+const knownDays = computed(() => {
+  if (!notes.value.length) return 1;
+  const earliest = notes.value[notes.value.length - 1].createTime;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const p = (ts: number) => {
+    const d = new Date(ts);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  };
+  return Math.max(1, Math.floor((p(Date.now()) - p(earliest)) / dayMs) + 1);
+});
 
 const statusText = computed(() => {
   const s = tag.value?.status;
@@ -158,18 +172,11 @@ function meetingNo(index: number): number {
 function isMilestone(index: number): boolean {
   return [10, 20, 50].includes(meetingNo(index));
 }
-
-function formatTime(ts?: number): string {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getMonth() + 1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
 </script>
 
 <style scoped>
 .page {
-  height: 100vh;
+  min-height: 100vh;
   background-color: var(--color-bg-system);
 }
 
@@ -201,7 +208,7 @@ function formatTime(ts?: number): string {
 }
 
 .head-name {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
 }
@@ -355,13 +362,13 @@ function formatTime(ts?: number): string {
 
 /* 里程碑星星：安静，不张扬 */
 .note-star {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-primary);
 }
 
 /* 初遇标记：底部微微暖意 */
 .note-first {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-green);
 }
 

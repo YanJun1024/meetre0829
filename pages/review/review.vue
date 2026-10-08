@@ -23,7 +23,7 @@
             </view>
           </view>
           <!-- 最近标签快捷入口 -->
-          <scroll-view v-if="recentTags.length" scroll-x class="recent-row">
+          <scroll-view v-if="recentTags.length && !keyword" scroll-x class="recent-row">
             <view
               v-for="name in recentTags"
               :key="'recent:' + name"
@@ -33,26 +33,24 @@
               #{{ name }}
             </view>
           </scroll-view>
-          <!-- 显示休息中的词：打开后灰排在列表末尾 -->
-          <view class="rest-row">
+          <!-- v1.6 排序栏：共 X 个词 + 排序方式 -->
+          <view class="sort-bar">
+            <text class="sort-left">共 {{ totalWords }} 个词</text>
+            <view class="sort-right" @click="showSortSheet">
+              <text>{{ sortLabel }} ▾</text>
+            </view>
+          </view>
+          <!-- 显示休息中的词：休息中词数为 0 且开关关闭时整行隐藏（v1.6） -->
+          <view v-if="restingCount || showResting" class="rest-row">
             <text class="rest-label">显示休息中的词</text>
             <switch
               class="rest-switch"
               :checked="showResting"
-              color="#B8860B"
+              :color="primaryColor"
               @change="onToggleResting"
             />
           </view>
         </view>
-      </view>
-
-      <!-- 个性化回访提示（v2.0 智能维护）：红档中最久未复习的标签，当日可关闭 -->
-      <view v-if="revisitName && !keyword" class="revisit-banner">
-        <view class="revisit-text" @click="goRevisit">
-          <AppIcon name="bulb" :size="14" color="#9A7209" />
-          <text>这位老朋友 #{{ revisitName }} 好久没见了</text>
-        </view>
-        <text class="revisit-close" @click="dismissRevisit">✕</text>
       </view>
 
       <!-- 排名列表（按排名分降序）：左滑词典 / 右滑笔记 -->
@@ -84,22 +82,39 @@
           >
             <text class="rank-no">{{ tag.status === 'snoozed' ? '🌙' : tag.rank }}</text>
             <view class="rank-info">
-              <text class="rank-name">#{{ tag.name }}</text>
-              <text class="rank-meta">
-                你们已相遇 {{ tag.noteCount }} 次<text v-if="tag.status === 'snoozed'" class="rest-meta"> · 休息中</text>
-              </text>
+              <text class="rank-name">{{ tag.name }}</text>
+              <text class="rank-meta">{{ lastNotePreview(tag.name) }}</text>
               <text v-if="index === 0 && tag.status !== 'snoozed'" class="swipe-tip">左滑查词典 · 右滑看相遇史</text>
             </view>
-            <view class="status-dot" :class="`dot-${tag.statusLevel}`" />
+            <!-- v1.6 右侧徽章：休息中 / 初遇 / N 次 -->
+            <view class="word-right">
+              <text v-if="tag.status === 'snoozed'" class="word-tag">休息中</text>
+              <text v-else-if="tag.noteCount === 1" class="badge badge-first">初遇</text>
+              <text v-else class="badge badge-count">{{ tag.noteCount }} 次</text>
+            </view>
           </view>
         </view>
 
-        <!-- 空状态：相遇本的扉页 -->
-        <view v-if="!filteredTags.length" class="empty title-page">
-          <text class="tp-welcome">✦ 欢迎 ✦</text>
-          <text class="tp-line">这是你和单词的相遇本</text>
-          <text class="tp-line">记下你遇到的第一个词吧</text>
-          <text class="tp-sign">—— MeetRe ——</text>
+        <!-- v1.6 三种空状态 -->
+        <!-- ① 搜索无结果：带回首页记下来 -->
+        <view v-if="!filteredTags.length && keyword" class="flyleaf">
+          <text class="flyleaf-title">还没遇到过这个词</text>
+          <text class="flyleaf-link" @click="goHomeRecord">记下来吧 →</text>
+        </view>
+        <!-- ② 书架全空 -->
+        <view v-else-if="!filteredTags.length && !totalWords" class="flyleaf">
+          <text class="flyleaf-icon">📖</text>
+          <text class="flyleaf-title">书架还是空的</text>
+          <text class="flyleaf-desc">去记下第一个遇到的词吧</text>
+        </view>
+        <!-- ③ 有词但当前条件下列表为空（如休息中的词被收起） -->
+        <view v-else-if="!filteredTags.length" class="empty-tip">
+          <text>这里还很安静</text>
+        </view>
+
+        <!-- 列表底部统计（v1.6） -->
+        <view v-if="filteredTags.length" class="list-footer">
+          一共 {{ totalWords }} 个词 · {{ totalMeets }} 次相遇
         </view>
       </view>
     </view>
@@ -162,7 +177,7 @@
                     :images="note.images || []"
                     :audios="note.audios || []"
                   />
-                  <text class="note-time">{{ formatTime(note.createTime) }}</text>
+                  <text class="note-time">{{ formatMeetTime(note.createTime) }}</text>
                 </view>
               </view>
             </scroll-view>
@@ -260,13 +275,24 @@ import { computed, reactive, ref } from "vue";
 import FloatAddButton from "@/components/FloatAddButton.vue";
 import AttachmentList from "@/components/AttachmentList.vue";
 import AppIcon from "@/components/AppIcon.vue";
-import { useNotesStore } from "@/store/notes";
+import { findTagCI, normalizeWord, useNotesStore } from "@/store/notes";
 import { resolveDefinition } from "@/utils/definition";
-import { calculateTagScore } from "@/utils/rank";
-import type { Note, RankedTag, Tag } from "@/types";
+import { calculateTagScore, sortRankedTags } from "@/utils/rank";
+import { formatMeetTime } from "@/utils/time";
+import type { Note, RankedTag, Tag, TagSortMode } from "@/types";
 import { onShow } from "@dcloudio/uni-app";
 
 const store = useNotesStore();
+
+/** 跟随系统主题的主色（switch/confirmColor 不支持 CSS 变量，需 JS 动态取值） */
+const primaryColor = computed(() => {
+  try {
+    return uni.getSystemInfoSync().theme === "dark" ? "#D2A93C" : "#B8860B";
+  } catch {
+    return "#B8860B";
+  }
+});
+
 const keyword = ref("");
 
 /** 是否显示休息中的词（开关打开后，灰在列表末尾） */
@@ -276,22 +302,36 @@ function onToggleResting(e: any) {
   showResting.value = !!e.detail.value;
 }
 
-/** 休息中的词：按最近一次相遇时间倒序，附在活跃列表末尾（搜索时同样可命中） */
+/** 把任意标签补全为排名视图模型 */
+function toRanked(tag: Tag, rank = 0): RankedTag {
+  const { score, noteCount, lastTime, firstTime } = calculateTagScore(
+    tag,
+    store.notes
+  );
+  return { ...tag, score, noteCount, lastTime, firstTime, rank };
+}
+
+/** 当前仍在休息期内的词数量（v1.6：为 0 时隐藏开关行） */
+const restingCount = computed(
+  () =>
+    store.tags.filter(
+      (t) => t.status === "snoozed" && (t.snoozeExpireAt || 0) > Date.now()
+    ).length
+);
+
+/** 休息中的词：附在活跃列表末尾（搜索时同样可命中，大小写不敏感） */
 const restingTags = computed<RankedTag[]>(() => {
   if (!showResting.value) return [];
   const now = Date.now();
-  const kw = keyword.value;
+  const kw = keyword.value.trim().toLowerCase();
   return store.tags
     .filter(
       (t) =>
         t.status === "snoozed" &&
         (t.snoozeExpireAt || 0) > now &&
-        (!kw || t.name.includes(kw))
+        (!kw || t.name.toLowerCase().includes(kw))
     )
-    .map((t: Tag) => {
-      const { score, noteCount, lastTime } = calculateTagScore(t, store.notes);
-      return { ...t, score, noteCount, lastTime, rank: 0, statusLevel: "yellow" as const };
-    })
+    .map((t: Tag) => toRanked(t))
     .sort((a, b) => b.lastTime - a.lastTime);
 });
 
@@ -310,50 +350,68 @@ onShow(() => {
   }
 });
 
-const filteredTags = computed(() => {
-  const active = keyword.value
-    ? store.rankedTags.filter((t) => t.name.includes(keyword.value))
+/** v1.6 排序方式：相遇次数（默认）/ 最近相遇 / 初遇时间 */
+const sortMode = ref<TagSortMode>("count");
+const SORT_LABELS: Record<TagSortMode, string> = {
+  count: "相遇次数",
+  recent: "最近相遇",
+  first: "初遇时间",
+};
+const sortLabel = computed(() => SORT_LABELS[sortMode.value]);
+
+function showSortSheet() {
+  const options = ["相遇次数", "最近相遇", "初遇时间"];
+  uni.showActionSheet({
+    itemList: options,
+    success: ({ tapIndex }) => {
+      sortMode.value = (["count", "recent", "first"] as TagSortMode[])[
+        tapIndex
+      ];
+    },
+  });
+}
+
+const filteredTags = computed<RankedTag[]>(() => {
+  const kw = keyword.value.trim().toLowerCase();
+  const active = kw
+    ? store.rankedTags.filter((t) => t.name.toLowerCase().includes(kw))
     : store.rankedTags;
-  return [...active, ...restingTags.value];
+  // v1.6：排序后休息中的词始终沉底（restingTags 已单独追加在后）
+  return [...sortRankedTags(active, sortMode.value), ...restingTags.value];
 });
+
+/** 全部词数与总相遇次数（含休息中 / 已掌握，v1.6 列表底部统计口径） */
+const totalWords = computed(() => store.tags.length);
+const totalMeets = computed(() =>
+  store.tags.reduce(
+    (sum, t) => sum + calculateTagScore(t, store.notes).noteCount,
+    0
+  )
+);
 
 const recentTags = computed(() => store.recentTags);
 
 /** 内嵌在搜索框里的快捷标签（排名第一/最新标签），开始输入时隐藏 */
 const quickTag = computed(() => store.recentTags[0] || "");
 
-// =============================================================
-// 个性化回访（v2.0 智能维护）：红档中最久未复习的标签
-// 点按定位到该标签；关闭后当日不再出现
-// =============================================================
-
-const VISIT_MUTE_KEY = "meetre_visit_muted";
-
-function dayKeyOf(ts: number): string {
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+/** 卡片副文案：最近一条笔记内容（v1.6） */
+function lastNotePreview(name: string): string {
+  const norm = normalizeWord(name);
+  const n = store.notes
+    .filter((x) => x.tags.includes(norm) && !x.isDeleted)
+    .sort((a, b) => b.createTime - a.createTime)[0];
+  if (!n) return "还没有写笔记";
+  return n.content || "（没有写笔记）";
 }
 
-const revisitMuted = ref(
-  uni.getStorageSync(VISIT_MUTE_KEY) === dayKeyOf(Date.now())
-);
-
-const revisitName = computed(() => {
-  if (revisitMuted.value) return "";
-  const reds = [...store.rankedTags]
-    .filter((t) => t.statusLevel === "red")
-    .sort((a, b) => (a.lastReviewed || 0) - (b.lastReviewed || 0));
-  return reds[0]?.name || "";
-});
-
-function goRevisit() {
-  if (revisitName.value) keyword.value = revisitName.value;
-}
-
-function dismissRevisit() {
-  revisitMuted.value = true;
-  uni.setStorageSync(VISIT_MUTE_KEY, dayKeyOf(Date.now()));
+/** 搜索无结果 → 回首页，把搜索词带进单词框并聚焦 */
+function goHomeRecord() {
+  try {
+    uni.setStorageSync("meetre_pending_word", keyword.value.trim());
+  } catch (e) {
+    /* 忽略 */
+  }
+  uni.switchTab({ url: "/pages/record/record" });
 }
 
 // =============================================================
@@ -369,10 +427,11 @@ const drawerSide = ref<DrawerSide>("right");
 const drawerTagName = ref("");
 const drawerShowState = ref<DrawerShowState>("closed");
 
-/** 当前抽屉对应的标签对象 */
-const drawerTag = computed<RankedTag | undefined>(() =>
-  store.rankedTags.find((t) => t.name === drawerTagName.value)
-);
+/** 当前抽屉对应的标签对象（活跃 / 休息中均可打开，大小写不敏感） */
+const drawerTag = computed<RankedTag | undefined>(() => {
+  const t = findTagCI(store.tags, drawerTagName.value);
+  return t ? toRanked(t) : undefined;
+});
 
 const touch = reactive({
   name: "",
@@ -440,7 +499,13 @@ function cardStyle(name: string) {
 // 关闭方式：①遮罩点击 ②返回按钮 ③反向滑动（笔记→左滑 / 词典→右滑）
 // =============================================================
 
-const DRAWER_WIDTH_RATIO = 0.88; // 抽屉占屏比
+// 抽屉占屏比（必须与 CSS .drawer-panel 的 --drawer-width 88% 一致）
+const DRAWER_WIDTH_RATIO = 0.88;
+
+// 抽屉宽度（px）：组件初始化时算一次，避免 touchmove 高频调用 getSystemInfoSync
+const drawerWidth = Math.round(
+  uni.getSystemInfoSync().windowWidth * DRAWER_WIDTH_RATIO,
+);
 
 const drawerDrag = reactive({
   startX: 0,
@@ -460,16 +525,15 @@ const CARD_LOCK_AFTER_DRAWER = 350;
 const drawerStyle = computed(() => {
   if (!drawerDrag.active) return {};
   // 笔记抽屉（左进）：左滑越偏越关闭；词典抽屉（右进）：右滑越偏越关闭
-  const { dx, startX } = drawerDrag;
+  const { dx } = drawerDrag;
   const side = drawerSide.value;
-  const width = Math.round(uni.getSystemInfoSync().windowWidth * DRAWER_WIDTH_RATIO);
   let clamped = 0;
   if (side === "left") {
     clamped = dx > 0 ? 0 : dx; // 只允许向左推走
-    clamped = Math.max(-width, clamped);
+    clamped = Math.max(-drawerWidth, clamped);
   } else {
     clamped = dx < 0 ? 0 : dx; // 只允许向右推走
-    clamped = Math.min(width, clamped);
+    clamped = Math.min(drawerWidth, clamped);
   }
   return clamped ? { transform: `translateX(${clamped}px)` } : {};
 });
@@ -568,7 +632,7 @@ function onDrawerTouchCancel() {
   drawerDrag.dx = 0;
 }
 
-/** 卡片单击 → 直接打开词典抽屉（单手用户兜底） */
+/** 卡片单击 → 打开操作菜单（休息/掌握/删除） */
 function onCardClick(tag: RankedTag) {
   // 滑动结束后 500ms 内忽略 click，避免横滑后立刻弹菜单
   if (Date.now() - lastSwipeTs < 500) return;
@@ -632,12 +696,6 @@ function defSourceLabel(tag: RankedTag): string {
   return "自动提取";
 }
 
-function formatTime(ts: number): string {
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getMonth() + 1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
 // =============================================================
 // 释义编辑弹层
 // =============================================================
@@ -663,7 +721,7 @@ function saveEditor() {
   uni.showToast({ title: "释义已保存" });
 }
 
-/** 点按卡片 → 管理菜单（v1.5：休息一天/三天/一周、完全掌握、删除） */
+/** 点按卡片 → 管理菜单（休息一天/三天/一周、完全掌握、删除） */
 function showActions(tag: RankedTag) {
   uni.showActionSheet({
     itemList: [
@@ -677,14 +735,29 @@ function showActions(tag: RankedTag) {
       if (tapIndex <= 2) {
         const days = [1, 3, 7][tapIndex];
         store.setTagStatus(tag.name, "snoozed", days);
-        uni.showToast({ title: `让它休息 ${days} 天`, icon: "none" });
+        uni.showToast({ title: "让它休息一会儿", icon: "none" });
       } else if (tapIndex === 3) {
         store.setTagStatus(tag.name, "mastered");
-        uni.showToast({ title: "收进已掌握词库啦", icon: "none" });
+        uni.showToast({ title: "已经收好啦 ✦", icon: "none" });
       } else if (tapIndex === 4) {
-        store.removeTag(tag.name);
-        uni.showToast({ title: "已删除", icon: "none" });
+        confirmDelete(tag);
       }
+    },
+  });
+}
+
+/** v1.6 删除二次确认：居中弹窗，「再想想」/「删掉」 */
+function confirmDelete(tag: RankedTag) {
+  uni.showModal({
+    title: "删除",
+    content: `确定要删掉和「${tag.name}」的所有记录吗？`,
+    cancelText: "再想想",
+    confirmText: "删掉",
+    confirmColor: primaryColor,
+    success: ({ confirm }) => {
+      if (!confirm) return;
+      store.removeTag(tag.name);
+      uni.showToast({ title: "已删除", icon: "none" });
     },
   });
 }
@@ -692,7 +765,7 @@ function showActions(tag: RankedTag) {
 
 <style scoped>
 .page {
-  height: 100vh;
+  min-height: 100vh;
   background-color: var(--color-bg-system);
 }
 
@@ -762,13 +835,37 @@ function showActions(tag: RankedTag) {
   background-color: var(--color-bg-input);
 }
 
-.input-placeholder {
+:deep(.input-placeholder) {
   color: var(--color-text-placeholder);
+  font-size: var(--font-size-base);
 }
 
 .recent-row {
   white-space: nowrap;
   margin-top: var(--space-md);
+}
+
+/* v1.6 排序栏 */
+.sort-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-md);
+}
+
+.sort-left {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.sort-right {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.sort-right:active {
+  opacity: 0.7;
 }
 
 /* 「显示休息中的词」开关行：安静、无框，只留一条淡折痕 */
@@ -812,37 +909,10 @@ function showActions(tag: RankedTag) {
   margin-top: var(--space-sm);
 }
 
-/* 个性化回访提示条（v2.0）：轻量主色条，不阻断列表 */
-.revisit-banner {
-  margin-top: var(--space-md);
-  background-color: var(--color-primary-bg);
-  border-radius: var(--radius-md);
-  padding: var(--space-sm) var(--space-md);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
-
-.revisit-text {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--font-size-sm);
-  color: var(--color-primary-dark);
-}
-
-.revisit-close {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  padding: 0 var(--space-xs);
-}
-
 /* 卡片容器：底层滑动色，上层便签纸卡片（列表间距 12px） */
 .card-wrap {
   position: relative;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -862,7 +932,7 @@ function showActions(tag: RankedTag) {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #FFFEF5;
+  color: var(--color-text-inverse);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
 }
@@ -889,7 +959,7 @@ function showActions(tag: RankedTag) {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--space-md);
   box-shadow: var(--shadow-card);
   transition: transform 0.2s ease;
   min-height: 56px;
@@ -917,18 +987,40 @@ function showActions(tag: RankedTag) {
   color: var(--color-text-secondary);
 }
 
-.rank-card.resting .rank-meta,
-.rank-card.resting .status-dot {
+.rank-card.resting .rank-meta {
   color: var(--color-text-placeholder);
 }
 
-.rank-card.resting .status-dot {
-  background-color: var(--color-text-placeholder);
-  box-shadow: 0 0 0 3px transparent;
+/* v1.6 右侧徽章区 */
+.word-right {
+  margin-left: var(--space-sm);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
-.rest-meta {
+.badge {
+  font-size: var(--font-size-xs);
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+
+.badge-first {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.badge-count {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.word-tag {
+  font-size: var(--font-size-xs);
   color: var(--color-text-placeholder);
+  background-color: var(--color-bg-input);
+  border-radius: 10px;
+  padding: 3px 10px;
 }
 
 /* =============================================================
@@ -947,12 +1039,15 @@ function showActions(tag: RankedTag) {
   background-color: rgba(0, 0, 0, 0.45);
 }
 
-/* 抽屉面板：宽度 = 屏幕 88%，高度铺满 */
+/* 抽屉面板：宽度 = 屏幕 88%，高度铺满
+   注意：宽度比例 0.88 与 JS 中 DRAWER_WIDTH_RATIO 必须保持一致，
+   否则拖拽位移钳制会与实际面板宽度错位 */
 .drawer-panel {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 88%;
+  --drawer-width: 88%;
+  width: var(--drawer-width);
   background-color: var(--color-bg-card);
   box-shadow: var(--shadow-drawer);
   transition: transform 0.24s ease;
@@ -1027,31 +1122,8 @@ function showActions(tag: RankedTag) {
 }
 
 .swipe-tip {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-text-placeholder);
-}
-
-.status-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: var(--radius-full);
-  flex-shrink: 0;
-}
-
-/* 同色浅底光晕：提升小色点的可读性 */
-.dot-red {
-  background-color: var(--color-red);
-  box-shadow: 0 0 0 3px var(--color-red-bg);
-}
-
-.dot-yellow {
-  background-color: var(--color-yellow);
-  box-shadow: 0 0 0 3px var(--color-yellow-bg);
-}
-
-.dot-green {
-  background-color: var(--color-green);
-  box-shadow: 0 0 0 3px var(--color-green-bg);
 }
 
 /* 展开视图（词典/笔记） */
@@ -1307,41 +1379,60 @@ function showActions(tag: RankedTag) {
   border: none;
 }
 
-.empty {
+/* v1.6 空状态（扉页样式） */
+.flyleaf {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-md);
   text-align: center;
+  padding: 70px 40px;
+}
+
+.flyleaf-icon {
+  font-size: 32px;
+  opacity: 0.5;
+  margin-bottom: 18px;
+}
+
+.flyleaf-title {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.06em;
+}
+
+.flyleaf-desc {
+  margin-top: 12px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  padding: var(--space-3xl) 0;
-  font-size: var(--font-size-base);
+  line-height: 2;
 }
 
-/* 空状态 = 相遇本的扉页：居中、留白宽、字像印在环衬页上 */
-.title-page {
-  gap: 14px;
-  padding: 96px 0 var(--space-3xl);
-}
-
-.tp-welcome {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
+.flyleaf-link {
+  margin-top: 20px;
+  font-size: var(--font-size-sm);
   color: var(--color-primary);
-  letter-spacing: 4px;
-  margin-bottom: var(--space-sm);
+  letter-spacing: 0.02em;
 }
 
-.tp-line {
-  font-size: var(--font-size-base);
-  color: var(--color-text-secondary);
-  line-height: 1.7;
+.flyleaf-link:active {
+  opacity: 0.7;
 }
 
-.tp-sign {
-  margin-top: var(--space-lg);
+.empty-tip {
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-placeholder);
+  padding: 24px 0;
+  letter-spacing: 0.02em;
+}
+
+/* v1.6 列表底部统计 */
+.list-footer {
+  text-align: center;
   font-size: var(--font-size-xs);
   color: var(--color-text-placeholder);
-  letter-spacing: 2px;
+  padding: var(--space-md) 0 var(--space-lg);
+  letter-spacing: 0.02em;
 }
 </style>

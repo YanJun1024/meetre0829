@@ -59,15 +59,16 @@ import AppIcon from "@/components/AppIcon.vue";
 const store = useNotesStore();
 const keyword = ref("");
 
-/** 休息中且未到期的标签：按回来时间升序 */
+/** 休息中且未到期的标签：按回来时间升序（v1.6：搜索大小写不敏感） */
 const filteredTags = computed(() => {
   const now = Date.now();
+  const kw = keyword.value.trim().toLowerCase();
   return store.tags
     .filter(
       (t) =>
         t.status === "snoozed" &&
         (t.snoozeExpireAt || 0) > now &&
-        t.name.includes(keyword.value)
+        (!kw || t.name.toLowerCase().includes(kw))
     )
     .sort((a, b) => (a.snoozeExpireAt || 0) - (b.snoozeExpireAt || 0));
 });
@@ -120,7 +121,7 @@ function backText(expireAt?: number): string {
 
 <style scoped>
 .page {
-  height: 100vh;
+  min-height: 100vh;
   background-color: var(--color-bg-system);
 }
 
@@ -162,8 +163,9 @@ function backText(expireAt?: number): string {
   font-size: var(--font-size-base);
 }
 
-.input-placeholder {
+:deep(.input-placeholder) {
   color: var(--color-text-placeholder);
+  font-size: var(--font-size-base);
 }
 
 .snoozed-list {
@@ -188,9 +190,9 @@ function backText(expireAt?: number): string {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-lg);
+  padding: var(--space-md);
   box-shadow: var(--shadow-card);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
 }
 
 /* 按压态：轻米色反馈 */

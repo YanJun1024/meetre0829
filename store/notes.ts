@@ -1,14 +1,29 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
-import type { Familiarity, Note, Tag, TagStatus } from "@/types";
+import type { Note, Tag, TagStatus } from "@/types";
 import { computeRankedTags } from "@/utils/rank";
 import { extractDefinition } from "@/utils/definition";
 import { logReview } from "@/utils/review-log";
 
-/** 从笔记内容中解析 #标签 */
+/**
+ * 单词归一（v1.6 单词去重逻辑）：
+ * 不区分大小写，统一转成小写存储和比较（Apple = apple）。
+ * 内部空格压缩为单个空格。
+ */
+export function normalizeWord(word: string): string {
+  return word.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** 从笔记内容中解析 #标签（统一小写，兼容历史正文写法） */
 export function parseTags(content: string): string[] {
   const matches = content.match(/#([^\s#]+)/g) || [];
-  return [...new Set(matches.map((m) => m.slice(1)))];
+  return [...new Set(matches.map((m) => normalizeWord(m.slice(1))))];
+}
+
+/** 大小写不敏感地查找标签（Apple 能命中 apple） */
+export function findTagCI(tags: Tag[], name: string): Tag | undefined {
+  const lower = normalizeWord(name);
+  return tags.find((t) => t.name.toLowerCase() === lower);
 }
 
 function createTag(name: string): Tag {
@@ -22,21 +37,25 @@ function createTag(name: string): Tag {
   };
 }
 
-/** 云端文档（_id）→ 前端模型（id） */
+/** 云端文档（_id）→ 前端模型（id）；标签名统一小写（v1.6 Apple=apple） */
 function noteFromCloud(doc: Record<string, any>): Note {
-  const { _id, ...rest } = doc;
-  return { id: _id, ...rest } as Note;
+  const { _id, tags, ...rest } = doc;
+  return {
+    id: _id,
+    tags: Array.isArray(tags) ? tags.map((t: string) => normalizeWord(t)) : [],
+    ...rest,
+  } as Note;
 }
 
 function tagFromCloud(doc: Record<string, any>): Tag {
-  const { _id, ...rest } = doc;
-  return { ...rest } as Tag;
+  const { _id, name, ...rest } = doc;
+  return { name: normalizeWord(name), ...rest } as Tag;
 }
 
-/** 云对象句柄 */
+/** 云对象句柄（customUI：云调用失败不弹 SDK 默认错误框，由业务层 warnOffline 统一静默降级） */
 function notesApi(): any {
   // eslint-disable-next-line
-  return uniCloud.importObject("notes");
+  return uniCloud.importObject("notes", { customUI: true });
 }
 
 export const useNotesStore = defineStore("notes", () => {
@@ -102,8 +121,17 @@ export const useNotesStore = defineStore("notes", () => {
     try {
       const cached = uni.getStorageSync(CACHE_KEY);
       if (cached && Array.isArray(cached.notes)) {
-        notes.value = cached.notes as Note[];
-        tags.value = (cached.tags || []) as Tag[];
+        // v1.6：历史缓存里的标签名/笔记 tags 统一归一为小写（Apple → apple）
+        notes.value = (cached.notes as Note[]).map((n) => ({
+          ...n,
+          tags: Array.isArray(n.tags)
+            ? n.tags.map((t) => normalizeWord(t))
+            : [],
+        }));
+        tags.value = ((cached.tags || []) as Tag[]).map((t) => ({
+          ...t,
+          name: normalizeWord(t.name),
+        }));
         return notes.value.length > 0 || tags.value.length > 0;
       }
     } catch (e) {
@@ -136,10 +164,14 @@ export const useNotesStore = defineStore("notes", () => {
     for (const doc of cloudNotes) {
       if (!noteIds.has(doc._id)) mergedNotes.push(noteFromCloud(doc));
     }
-    const tagNames = new Set(tags.value.map((t) => t.name));
+    const tagNames = new Set(tags.value.map((t) => normalizeWord(t.name)));
     const mergedTags = [...tags.value];
     for (const doc of cloudTags) {
-      if (!tagNames.has(doc.name)) mergedTags.push(tagFromCloud(doc));
+      const normalized = normalizeWord(doc.name);
+      if (!tagNames.has(normalized)) {
+        tagNames.add(normalized);
+        mergedTags.push(tagFromCloud(doc));
+      }
     }
     notes.value = mergedNotes;
     tags.value = mergedTags;
@@ -175,11 +207,13 @@ export const useNotesStore = defineStore("notes", () => {
   ) {
     const now = Date.now();
     const tempId = `local_${now}`;
+    // v1.6：单词统一小写存储（Apple = apple）
+    const normalizedTag = tagName ? normalizeWord(tagName) : "";
     const note: Note = {
       id: tempId,
       userId: "local_user",
       content,
-      tags: tagName ? [tagName] : [],
+      tags: normalizedTag ? [normalizedTag] : [],
       scene,
       sceneType,
       images,
@@ -191,10 +225,10 @@ export const useNotesStore = defineStore("notes", () => {
     };
     notes.value.push(note);
 
-    if (tagName && !tags.value.some((t) => t.name === tagName)) {
-      tags.value.push(createTag(tagName));
+    if (normalizedTag && !findTagCI(tags.value, normalizedTag)) {
+      tags.value.push(createTag(normalizedTag));
     }
-    const tag = tags.value.find((t) => t.name === tagName);
+    const tag = findTagCI(tags.value, normalizedTag);
     if (tag && !tag.notes.includes(tempId)) {
       tag.notes.push(tempId);
     }
@@ -204,16 +238,16 @@ export const useNotesStore = defineStore("notes", () => {
     // 只在阅读时实时展示，不作为「你的理解」保存
     let autoDef: { name: string; text: string } | null = null;
     if (tag && !tag.userDefinition?.text) {
-      const extracted = extractDefinition(tagName, notes.value);
+      const extracted = extractDefinition(normalizedTag, notes.value);
       if (extracted && extracted.rule !== 3 && extracted.text) {
-        setUserDefinition(tagName, extracted.text, "auto");
-        autoDef = { name: tagName, text: extracted.text };
+        setUserDefinition(normalizedTag, extracted.text, "auto");
+        autoDef = { name: normalizedTag, text: extracted.text };
       }
     }
 
     // 云端写穿：成功后用云端 _id 替换临时 id
     notesApi()
-      .addNote({ content, tag: tagName, scene, sceneType, images, audios })
+      .addNote({ content, tag: normalizedTag, scene, sceneType, images, audios })
       .then((res: { id: string }) => {
         cloudReady.value = true;
         note.id = res.id;
@@ -228,22 +262,15 @@ export const useNotesStore = defineStore("notes", () => {
   }
 
   function setTagStatus(name: string, status: TagStatus, snoozeDays = 7) {
-    const tag = tags.value.find((t) => t.name === name);
+    const norm = normalizeWord(name);
+    const tag = findTagCI(tags.value, norm);
     if (!tag) return;
-    const prevStatus = tag.status;
     tag.status = status;
-    // 退出「已掌握」= 从 0 开始（开发文档 3.3.2）：清空熟悉度，排名回到相遇次数本身
-    let reset = false;
-    if (prevStatus === "mastered" && status === "learning") {
-      reset = true;
-      tag.familiarity = null;
-      tag.familiarityUpdatedAt = Date.now();
-    }
     if (status === "mastered") {
       tag.masteredAt = Date.now();
       delete tag.snoozeExpireAt;
     } else if (status === "snoozed") {
-      // 休息中：到期自动回到活跃列表（v1.5 支持一天 / 三天 / 一周）
+      // 休息中：到期自动回到活跃列表（v1.6 支持一天 / 三天 / 一周）
       tag.snoozeExpireAt =
         Date.now() + snoozeDays * 24 * 60 * 60 * 1000;
       delete tag.masteredAt;
@@ -253,7 +280,7 @@ export const useNotesStore = defineStore("notes", () => {
     }
 
     notesApi()
-      .setTagStatus({ name, status, reset })
+      .setTagStatus({ name: norm, status })
       .then(() => {
         cloudReady.value = true;
       })
@@ -261,9 +288,8 @@ export const useNotesStore = defineStore("notes", () => {
   }
 
   /**
-   * 「暂时不想看」到期持久恢复（开发文档 3.4）：
+   * 「休息中」到期持久恢复：
    * rank.ts 已做显示层惰性放行，这里负责把存储层 status 写回 learning
-   * （排名分不变、熟悉度保留，与退出掌握的「从 0 开始」区分）
    */
   function restoreExpiredSnoozes() {
     const now = Date.now();
@@ -286,10 +312,11 @@ export const useNotesStore = defineStore("notes", () => {
   }
 
   function removeTag(name: string) {
-    tags.value = tags.value.filter((t) => t.name !== name);
+    const norm = normalizeWord(name);
+    tags.value = tags.value.filter((t) => normalizeWord(t.name) !== norm);
 
     notesApi()
-      .removeTag({ name })
+      .removeTag({ name: norm })
       .then(() => {
         cloudReady.value = true;
       })
@@ -298,37 +325,35 @@ export const useNotesStore = defineStore("notes", () => {
 
   /** 行为数累加到标签最新一条笔记（求和 = 标签级行为数） */
   function bumpLatestNote(
-    name: string,
+    rawName: string,
     field: "dictLookups" | "noteReviews"
   ) {
+    const name = normalizeWord(rawName);
     const latest = notes.value
       .filter((n) => n.tags.includes(name) && !n.isDeleted)
       .sort((a, b) => b.createTime - a.createTime)[0];
     if (latest) latest[field]++;
   }
 
-  /** 应用云端推断结果（熟悉度 / 自动取消掌握） */
-  function applyTagPatch(name: string, patch: Record<string, any>) {
-    const tag = tags.value.find((t) => t.name === name);
+  /** 应用云端回写结果（如自动取消掌握） */
+  function applyTagPatch(rawName: string, patch: Record<string, any>) {
+    const tag = findTagCI(tags.value, rawName);
     if (!tag || !patch) return;
+    // v1.6 客户端不展示熟悉度，云端即使回写也忽略相关字段
+    delete patch.familiarity;
+    delete patch.familiaritySource;
+    delete patch.familiarityUpdatedAt;
     Object.assign(tag, patch);
     if (patch.status === "learning") delete tag.masteredAt;
   }
 
   /** 查词典行为（打开词典视图触发） */
-  function recordLookup(name: string) {
+  function recordLookup(rawName: string) {
+    const name = normalizeWord(rawName);
     bumpLatestNote(name, "dictLookups");
     logReview("dict"); // 按天聚合，供「我的」页近7天趋势图
-    const tag = tags.value.find((t) => t.name === name);
-    if (tag) {
-      tag.lastReviewed = Date.now();
-      // v2.0 熟悉度自动降级：标「熟」却查词典 → 降为有点印象（本地乐观更新）
-      if (tag.familiarity === "familiar" && tag.familiaritySource !== "user") {
-        tag.familiarity = "fuzzy";
-        tag.familiaritySource = "behavior";
-        tag.familiarityUpdatedAt = Date.now();
-      }
-    }
+    const tag = findTagCI(tags.value, name);
+    if (tag) tag.lastReviewed = Date.now();
 
     if (shouldReport(name, "dict")) {
       notesApi()
@@ -342,10 +367,11 @@ export const useNotesStore = defineStore("notes", () => {
   }
 
   /** 回看笔记行为（打开笔记视图触发） */
-  function recordNoteReview(name: string) {
+  function recordNoteReview(rawName: string) {
+    const name = normalizeWord(rawName);
     bumpLatestNote(name, "noteReviews");
     logReview("review"); // 按天聚合，供「我的」页近7天趋势图
-    const tag = tags.value.find((t) => t.name === name);
+    const tag = findTagCI(tags.value, name);
     if (tag) tag.lastReviewed = Date.now();
 
     if (shouldReport(name, "review")) {
@@ -360,29 +386,14 @@ export const useNotesStore = defineStore("notes", () => {
   }
 
   /** 保存用户释义（source: auto=采用自动提取 / manual=手动编辑） */
-  function setUserDefinition(name: string, text: string, source: "auto" | "manual") {
-    const tag = tags.value.find((t) => t.name === name);
+  function setUserDefinition(rawName: string, text: string, source: "auto" | "manual") {
+    const name = normalizeWord(rawName);
+    const tag = findTagCI(tags.value, name);
     if (!tag) return;
     tag.userDefinition = { text, source, weak: false, updatedAt: Date.now() };
 
     notesApi()
       .setUserDefinition({ name, text, source })
-      .then(() => {
-        cloudReady.value = true;
-      })
-      .catch(warnOffline);
-  }
-
-  /** 保存后反馈：用户手动标记熟悉度（优先级高于行为推断） */
-  function setFamiliarity(name: string, familiarity: Familiarity) {
-    const tag = tags.value.find((t) => t.name === name);
-    if (!tag) return;
-    tag.familiarity = familiarity;
-    tag.familiaritySource = "user";
-    tag.familiarityUpdatedAt = Date.now();
-
-    notesApi()
-      .setFamiliarity({ name, familiarity })
       .then(() => {
         cloudReady.value = true;
       })
@@ -396,8 +407,9 @@ export const useNotesStore = defineStore("notes", () => {
    * 系统释义兜底（v1.5 3.6.2 第二层）：
    * 仅当用户释义/自动提取都没有时才请求云端词典，取回后缓存到标签
    */
-  async function fetchSysDefinition(name: string) {
-    const tag = tags.value.find((t) => t.name === name);
+  async function fetchSysDefinition(rawName: string) {
+    const name = normalizeWord(rawName);
+    const tag = findTagCI(tags.value, name);
     if (!tag || tag.userDefinition?.text || tag.sysDefinition) return;
     if (extractDefinition(name, notes.value)?.text) return; // 第一层已覆盖
     if (sysDefLoading.value === name) return;
@@ -432,7 +444,6 @@ export const useNotesStore = defineStore("notes", () => {
     recordLookup,
     recordNoteReview,
     setUserDefinition,
-    setFamiliarity,
     fetchSysDefinition,
   };
 });

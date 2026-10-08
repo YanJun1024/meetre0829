@@ -17,10 +17,10 @@ interface DayCount {
 
 type ReviewLog = Record<string, DayCount>;
 
-/** 云对象句柄 */
+/** 云对象句柄（customUI：失败静默，不弹 SDK 默认错误框） */
 function notesApi(): any {
   // eslint-disable-next-line
-  return uniCloud.importObject("notes");
+  return uniCloud.importObject("notes", { customUI: true });
 }
 
 function dayKeyLocal(ts = Date.now()): string {

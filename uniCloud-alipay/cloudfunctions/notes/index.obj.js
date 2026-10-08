@@ -16,7 +16,6 @@ const tagsCol = db.collection("tags");
 const reviewLogsCol = db.collection("review_logs");
 
 const SNOOZE_DURATION = 7 * 24 * 60 * 60 * 1000; // 暂时不想看：7 天
-const REMASTER_INIT_SCORE = 1; // 退出已掌握后的初始排名分（开发文档 3.1.5）
 const REVIEW_KEEP_DAYS = 7; // 复习日志云端保留天数
 
 /** 复习日志：按天取 MAX 合并（防重复累加，支持跨设备），并裁至近 N 天 */
@@ -127,8 +126,6 @@ module.exports = {
           name: tag,
           noteCount: 1,
           status: "learning",
-          rankScore: 0,
-          familiarity: null,
           userDefinition: null,
           notes: [res.id],
         });
@@ -143,8 +140,8 @@ module.exports = {
     return { errCode: 0, id: res.id };
   },
 
-  /** 更新标签状态：learning / mastered / snoozed；reset=退出已掌握，从 0 开始 */
-  async setTagStatus({ name, status, reset }) {
+  /** 更新标签状态：learning / mastered / snoozed */
+  async setTagStatus({ name, status }) {
     const userId = this.userId;
     const now = Date.now();
 
@@ -160,14 +157,6 @@ module.exports = {
       update.snoozeExpireAt = null;
     }
 
-    // 开发文档 3.3.2：退出「已掌握」→ 从 0 开始（清空熟悉度，排名分回初始值）
-    if (reset && status === "learning") {
-      update.familiarity = null;
-      update.familiarityUpdatedAt = now;
-      update.rankScore = REMASTER_INIT_SCORE;
-      update.familiaritySource = null;
-    }
-
     await tagsCol.where({ userId, name }).update(update);
     return { errCode: 0 };
   },
@@ -181,15 +170,12 @@ module.exports = {
 
   /**
    * 复习行为埋点：action = "dict"（查词典）| "review"（回看笔记）
-   * - 行为计数记到标签最新一条笔记（各笔记求和 = 标签级行为数，排名公式语义不变）
-   * - v1.0 行为推断（开发文档 3.2）：
-   *   记完 5 分钟内查词典 → 熟悉度=不熟；记完 5 分钟内回看 → 熟悉度=有点印象
-   * - 已掌握后查词典 → 自动取消掌握，排名分清零（重新掌握从 0 开始）
+   * - 行为计数记到标签最新一条笔记（各笔记求和 = 标签级行为数）
+   * - 已掌握后查词典 → 自动取消掌握（重新回到学习中）
    */
   async recordAction({ name, action }) {
     const userId = this.userId;
     const now = Date.now();
-    const RECENT_ADD_WINDOW = 5 * 60 * 1000;
 
     // 最新一条未删除笔记
     const latestRes = await notesCol
@@ -198,15 +184,13 @@ module.exports = {
       .limit(1)
       .get();
     const latestNote = latestRes.data[0];
-    const recentAdd =
-      latestNote && now - latestNote.createTime < RECENT_ADD_WINDOW;
 
     if (latestNote) {
       const field = action === "dict" ? "dictLookups" : "noteReviews";
       await notesCol.doc(latestNote._id).update({ [field]: dbCmd.inc(1) });
     }
 
-    // 更新标签：lastReviewed / 熟悉度推断 / 自动取消掌握
+    // 更新标签：lastReviewed / 自动取消掌握
     const tagRes = await tagsCol.where({ userId, name }).get();
     const tag = tagRes.data[0];
     let patch = {};
@@ -215,22 +199,6 @@ module.exports = {
       if (action === "dict" && tag.status === "mastered") {
         patch.status = "learning";
         patch.masteredAt = null;
-        patch.rankScore = 0;
-      }
-      // 用户手动标记 > 行为推断（开发文档 3.2），手动标记后不再覆盖
-      if (recentAdd && tag.familiaritySource !== "user") {
-        patch.familiarity = action === "dict" ? "unfamiliar" : "fuzzy";
-        patch.familiaritySource = "behavior";
-        patch.familiarityUpdatedAt = now;
-      } else if (
-        action === "dict" &&
-        tag.familiarity === "familiar" &&
-        tag.familiaritySource !== "user"
-      ) {
-        // v2.0 熟悉度自动降级：标了「熟」却还要查词典 → 降为有点印象
-        patch.familiarity = "fuzzy";
-        patch.familiaritySource = "behavior";
-        patch.familiarityUpdatedAt = now;
       }
       await tagsCol.doc(tag._id).update(patch);
     }
@@ -251,24 +219,6 @@ module.exports = {
       .where({ userId, name })
       .update({ userDefinition });
     return { errCode: 0, userDefinition };
-  },
-
-  /**
-   * 保存后反馈：用户手动标记熟悉度（开发文档 3.2.2 v1.5）
-   * familiarity: familiar=能 / fuzzy=有点悬 / unfamiliar=不能
-   * 手动标记优先级高于行为推断，不会被覆盖
-   */
-  async setFamiliarity({ name, familiarity }) {
-    const userId = this.userId;
-    if (!["unfamiliar", "fuzzy", "familiar"].includes(familiarity)) {
-      return { errCode: 1, errMsg: "参数错误" };
-    }
-    await tagsCol.where({ userId, name }).update({
-      familiarity,
-      familiaritySource: "user",
-      familiarityUpdatedAt: Date.now(),
-    });
-    return { errCode: 0 };
   },
 
   /** 迁移附件工具：整体替换笔记的 images/audios（白名单清洗，校验归属） */

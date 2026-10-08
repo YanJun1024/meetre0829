@@ -20,13 +20,33 @@ export function userApi(): any {
   return uniCloud.importObject("user", { customUI: true });
 }
 
-/** uni.login 取 code（回调包 Promise，兼容各版本 API） */
+/**
+ * uni.login 取 code（回调包 Promise，兼容各版本 API）
+ * 8s 超时兜底：隐私授权弹窗无人消费 / 网络挂起时，uni.login 可能既不 success 也不 fail，
+ * 超时后 reject，保证启动流程不会永久卡死（调用方 catch 后降级本地模式）
+ */
 function wxLoginCode(): Promise<string> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("uni.login 超时"));
+    }, 8000);
     uni.login({
       provider: "weixin",
-      success: (res: any) => resolve(res.code || ""),
-      fail: (err: any) => reject(err),
+      success: (res: any) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(res.code || "");
+      },
+      fail: (err: any) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      },
     });
   });
 }
@@ -141,7 +161,15 @@ export const useUserStore = defineStore("user", () => {
       console.log("[user] 静默登录成功", res.uid);
       return true;
     } catch (e) {
-      console.warn("[user] 静默登录失败，当前为本地模式：", e);
+      // 隐私未授权时 uni.login fail 的 errMsg 含 "privacy"，属预期分支，降噪日志
+      const msg = String(
+        (e as any)?.errMsg || (e as any)?.message || "",
+      ).toLowerCase();
+      if (msg.includes("privacy")) {
+        console.warn("[user] 隐私未授权，静默登录中止（本地模式）");
+      } else {
+        console.warn("[user] 静默登录失败，当前为本地模式：", e);
+      }
       return false;
     }
   }

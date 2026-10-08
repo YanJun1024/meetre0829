@@ -9,22 +9,50 @@ import { syncReviewLog } from "@/utils/review-log";
 // 注意：同意动作必须由真实的 <button open-type="agreePrivacyAuthorization"> 触发，
 // 普通 modal 的 confirm 直接 resolve 会被微信以 "buttonId is wrong" 拒绝，
 // 因此这里只把 resolve 转发给全局 PrivacyPopup 组件（内含官方同意按钮）。
+
+type PrivacyResolve = (opts: { event: string; buttonId?: string }) => void;
+
+// onLaunch 阶段 PrivacyPopup 尚未挂载，隐私回调的 resolve 先缓存在这里，
+// 等首页 PrivacyPopup 挂载后通过 __consumePendingPrivacy 补消费
+let pendingPrivacyResolve: PrivacyResolve | null = null;
+
 function setupPrivacyHandler() {
   const onNeedPrivacy = (uni as any).onNeedPrivacyAuthorization;
   if (!onNeedPrivacy) return; // 基础库 <2.32.3 无此 API，由接口报错分支兜底
-  onNeedPrivacy((resolve: (opts: { event: string; buttonId?: string }) => void) => {
+  onNeedPrivacy((resolve: PrivacyResolve) => {
+    // 上一个请求还没被弹窗接管：按拒绝结束，避免微信侧悬挂
+    if (pendingPrivacyResolve) {
+      pendingPrivacyResolve({ event: "disagree" });
+    }
+    pendingPrivacyResolve = resolve;
+    // 弹窗已挂载 → 事件实时触发；未挂载 → resolve 暂存，等组件挂载时补取
     uni.$emit("meetre-privacy", resolve);
   });
+  // 供 PrivacyPopup 挂载时补取启动阶段悬挂的授权请求，取走即清空
+  (uni as any).__consumePendingPrivacy = (): PrivacyResolve | null => {
+    const r = pendingPrivacyResolve;
+    pendingPrivacyResolve = null;
+    return r;
+  };
 }
 
-onLaunch(async () => {
+onLaunch(() => {
   console.log("MeetRe App Launch");
   setupPrivacyHandler();
-  // 先静默登录（token 自动随云对象调用上传），再拉取数据；登录失败仍以本地模式运行
-  await useUserStore().ensureLogin();
-  useNotesStore().loadAll();
-  // 近 7 天复习日志云端同步：拉取云端 → 合并 → 回写两端（失败静默降级本地）
+
+  const notesStore = useNotesStore();
+  // 数据加载与登录解耦：loadAll 内部先从本地缓存秒恢复，云端失败自动降级本地模式。
+  // 不能 await ensureLogin——无 token 时 uni.login 会触发隐私授权，而隐私弹窗要等
+  // 首页 PrivacyPopup 挂载后才能展示，串行 await 会把 loadAll 永久阻塞（列表全空）。
+  notesStore.loadAll();
+  // 复习日志同步自带本地降级，不依赖登录态
   syncReviewLog();
+  // 登录后台进行；成功后补拉一次云端（当天已同步则 loadAll 内部 0 读库直接返回）
+  useUserStore()
+    .ensureLogin()
+    .then((ok) => {
+      if (ok) notesStore.loadAll();
+    });
 });
 </script>
 

@@ -86,6 +86,8 @@ function dayKey(ts: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
 function dayLabel(
   key: string,
   ts: number,
@@ -95,7 +97,24 @@ function dayLabel(
   if (key === todayKey) return "今天";
   if (key === yesterdayKey) return "昨天";
   const d = new Date(ts);
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
+  const now = new Date();
+  const todayMid = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+  const thatMid = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate()
+  ).getTime();
+  const diffDays = Math.round((todayMid - thatMid) / 86400000);
+  // v1.6：一周内显示「周X」
+  if (diffDays < 7) return WEEKDAYS[d.getDay()];
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+  }
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
 function timeHM(ts: number): string {
@@ -116,7 +135,7 @@ function open(n: Note) {
 
 <style scoped>
 .page {
-  height: 100vh;
+  min-height: 100vh;
   background-color: var(--color-bg-system);
 }
 
@@ -145,9 +164,9 @@ function open(n: Note) {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--space-md);
   box-shadow: var(--shadow-card);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);

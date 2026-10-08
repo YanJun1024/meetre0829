@@ -59,12 +59,16 @@ import AppIcon from "@/components/AppIcon.vue";
 const store = useNotesStore();
 const keyword = ref("");
 
-/** 已掌握标签：按掌握时间降序 */
-const filteredTags = computed(() =>
-  store.masteredTags
-    .filter((t) => t.name.includes(keyword.value))
-    .sort((a, b) => (b.masteredAt || 0) - (a.masteredAt || 0))
-);
+/** 长按标志位：防止长按后抬手触发 click 导致弹两次窗 */
+let longPressed = false;
+
+/** 已掌握标签：按掌握时间降序（v1.6：搜索大小写不敏感） */
+const filteredTags = computed(() => {
+  const kw = keyword.value.trim().toLowerCase();
+  return store.masteredTags
+    .filter((t) => !kw || t.name.toLowerCase().includes(kw))
+    .sort((a, b) => (b.masteredAt || 0) - (a.masteredAt || 0));
+});
 
 function noteCount(name: string): number {
   return store.notes.filter((n) => n.tags.includes(name) && !n.isDeleted).length;
@@ -75,6 +79,7 @@ function noteCount(name: string): number {
  * 长按 + 二次确认，避免误触破坏「永久已掌握」语义
  */
 function confirmRestore(name: string) {
+  longPressed = true;
   uni.showModal({
     title: "放回我的词",
     content: `# ${name} 将放回「我的词」，重新出现在书架上，确定吗？`,
@@ -93,6 +98,11 @@ function confirmRestore(name: string) {
  * 还来查词典，说明这位老朋友还没真的读完
  */
 function viewDict(name: string) {
+  // 长按后抬手会触发 click，用标志位拦截
+  if (longPressed) {
+    longPressed = false;
+    return;
+  }
   uni.showModal({
     title: "查看词典",
     content: `查看 #${name} 的词典会把它移出已掌握词库，放回「我的词」，继续吗？`,
@@ -119,7 +129,7 @@ function formatTime(ts?: number): string {
 
 <style scoped>
 .page {
-  height: 100vh;
+  min-height: 100vh;
   background-color: var(--color-bg-system);
 }
 
@@ -161,8 +171,9 @@ function formatTime(ts?: number): string {
   font-size: var(--font-size-base);
 }
 
-.input-placeholder {
+:deep(.input-placeholder) {
   color: var(--color-text-placeholder);
+  font-size: var(--font-size-base);
 }
 
 .mastered-list {
@@ -188,9 +199,9 @@ function formatTime(ts?: number): string {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-lg);
+  padding: var(--space-md);
   box-shadow: var(--shadow-card);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
 }
 
 /* 按压态：轻米色反馈 */
@@ -218,7 +229,7 @@ function formatTime(ts?: number): string {
 }
 
 .card-tip {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-text-placeholder);
 }
 

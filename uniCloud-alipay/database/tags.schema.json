@@ -42,20 +42,6 @@
       "bsonType": "long",
       "description": "最近复习时间戳"
     },
-    "rankScore": {
-      "bsonType": "double",
-      "defaultValue": 0,
-      "description": "排名分（冻结于退出排名时）"
-    },
-    "familiarity": {
-      "bsonType": "string",
-      "enumeration": ["unfamiliar", "fuzzy", "familiar"],
-      "description": "熟悉度：不熟/有点印象/熟"
-    },
-    "familiarityUpdatedAt": {
-      "bsonType": "long",
-      "description": "熟悉度更新时间戳"
-    },
     "userDefinition": {
       "bsonType": "object",
       "description": "用户释义 {text, source, weak, updatedAt}"

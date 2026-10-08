@@ -609,9 +609,9 @@ button::after {
   border-radius: var(--radius-sm);
   box-sizing: border-box;
 }
-.ups-ph {
+:deep(.ups-ph) {
   color: var(--color-text-placeholder);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
 }
 .ups-clear {
   width: 48rpx;

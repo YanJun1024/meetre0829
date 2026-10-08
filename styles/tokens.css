@@ -22,7 +22,7 @@ page {
   --color-yellow: #B08B4C;   /* 来往中 - 暗哑赭黄 */
   --color-yellow-bg: #F4ECDB;
   --color-yellow-dark: #7A6420; /* 提示文字（浅底） */
-  --color-green: #7A8F6F;    /* 已读完 - 鼠尾草绿 */
+  --color-green: #5C7553;    /* 已读完 - 鼠尾草绿（加深保证徽章反色字对比度达标） */
   --color-green-bg: #E9EEE2;
 
   /* ========== 滑动动作色（右滑相遇史-暗金情感 / 左滑词典-灰蓝工具） ========== */
@@ -82,10 +82,10 @@ page {
   /* ========== 字体（系统默认，行高正文1.6/标题1.3） ========== */
   --font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Source Han Sans SC', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-size-xs: 12px;    /* 时间 / 标签 / 辅助 */
-  --font-size-sm: 13px;    /* 次要说明 */
+  --font-size-sm: 12px;    /* 次要说明（与 xs 同值，语义区分） */
   --font-size-base: 14px;  /* 正文 / 笔记 */
-  --font-size-md: 15px;    /* 卡片标题 */
-  --font-size-lg: 16px;    /* 列表单词 */
+  --font-size-md: 16px;    /* 卡片标题 */
+  --font-size-lg: 18px;    /* 列表单词 */
   --font-size-xl: 22px;    /* 页面大标题（问候语） */
   --font-size-2xl: 24px;   /* 输入时的单词 */
 
@@ -116,7 +116,7 @@ page {
     --color-yellow: #D4B878;
     --color-yellow-bg: #3D3524;
     --color-yellow-dark: #E0C078;
-    --color-green: #97AE8B;
+    --color-green: #456038;
     --color-green-bg: #2B362B;
 
     /* 滑动动作色 */

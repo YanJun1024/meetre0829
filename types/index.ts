@@ -54,5 +54,9 @@ export interface RankedTag extends Tag {
   noteCount: number;
   /** 最近相遇时间（最后一笔笔记的时间，无笔记为 0） */
   lastTime: number;
-  statusLevel: "red" | "yellow" | "green";
+  /** 初遇时间（最早一笔笔记的时间，无笔记为 0） */
+  firstTime: number;
 }
+
+/** 我的词排序方式（v1.6）：相遇次数（默认）/ 最近相遇 / 初遇时间 */
+export type TagSortMode = "count" | "recent" | "first";

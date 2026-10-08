@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 
 /**
  * 微信自定义隐私授权弹窗（配合 App.vue 的 onNeedPrivacyAuthorization）。
@@ -35,23 +35,52 @@ type ResolveFn = (opts: { event: string; buttonId?: string }) => void;
 let resolveFn: ResolveFn | null = null;
 
 function onShowPrivacy(resolve: ResolveFn) {
+  // 弹窗接管后清掉 App 侧暂存，保证同一个 resolve 只被一方持有
+  const consume = (uni as any).__consumePendingPrivacy;
+  if (typeof consume === "function") consume();
   resolveFn = resolve;
   visible.value = true;
 }
 uni.$on("meetre-privacy", onShowPrivacy);
 
+// App.onLaunch 阶段本组件尚未挂载，uni.login 触发的授权 resolve 被暂存在 App 侧，
+// 首页挂载后这里补取并弹窗，避免授权请求无人消费、uni.login 永久挂起
+onMounted(() => {
+  const consume = (uni as any).__consumePendingPrivacy;
+  if (typeof consume === "function") {
+    const pending = consume();
+    if (pending) onShowPrivacy(pending);
+  }
+});
+
 function onAgree() {
-  visible.value = false;
-  resolveFn?.({ event: "agree", buttonId: "agree-btn" });
-  resolveFn = null;
+  finish({ event: "agree", buttonId: "agree-btn" });
   uni.$emit("meetre-privacy-agreed");
 }
 
 function onRefuse() {
+  finish({ event: "disagree" });
+}
+
+/**
+ * 结束本次授权：resolve 只由用户实际点击的那个实例调用一次，
+ * 同时广播关闭其他页面的实例（record / profile 两个 tab 各挂了一个，
+ * tab 页不卸载、监听器都活着，不广播会在切 tab 后看到残留弹窗）
+ */
+function finish(result: { event: string; buttonId?: string }) {
+  const fn = resolveFn;
   visible.value = false;
-  resolveFn?.({ event: "disagree" });
+  resolveFn = null;
+  uni.$emit("meetre-privacy-close");
+  fn?.(result);
+}
+
+/** 其他实例已完成授权：关闭本实例弹窗，但不重复调用 resolve */
+function onRemoteClose() {
+  visible.value = false;
   resolveFn = null;
 }
+uni.$on("meetre-privacy-close", onRemoteClose);
 
 function openContract() {
   const openPrivacy = (uni as any).openPrivacyContract;
@@ -60,6 +89,7 @@ function openContract() {
 
 onUnmounted(() => {
   uni.$off("meetre-privacy", onShowPrivacy);
+  uni.$off("meetre-privacy-close", onRemoteClose);
 });
 </script>
 
